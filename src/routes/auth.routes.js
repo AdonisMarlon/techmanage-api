@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { login, registrarUsuario } from '../controladores/authCtrl.js';
+import { login, registrarUsuario, guardarTokenFCM  } from '../controladores/authCtrl.js';
 import { verificarToken } from '../middlewares/auth.js';
 
 const router = Router();
@@ -7,6 +7,9 @@ const router = Router();
 // Rutas de autenticación
 router.post('/login', login);
 router.post('/registrar', registrarUsuario);
+
+// Ruta protegida para guardar el token FCM (NUEVA)
+router.post('/auth/save-token', verificarToken, guardarTokenFCM);
 
 // Ruta protegida
 router.get('/perfil', verificarToken, (req, res) => {

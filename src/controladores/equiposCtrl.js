@@ -1,5 +1,9 @@
 import { conmysql } from '../db.js';
+import { notificarNuevoEquipo, notificarEquipoEditado } from '../services/notification.service.js';
 
+// ============================================================
+// OBTENER TODOS LOS EQUIPOS
+// ============================================================
 export const getEquipos = async (req, res) => {
     try {
         const query = `
@@ -14,11 +18,14 @@ export const getEquipos = async (req, res) => {
         const [result] = await conmysql.query(query);
         res.json(result);
     } catch (error) {
-        console.error('Error al obtener los equipos:', error);
+        console.error('[ERROR] getEquipos:', error.message);
         res.status(500).json({ error: 'Error al obtener los equipos' });
     }
 };
 
+// ============================================================
+// OBTENER EQUIPO POR ID
+// ============================================================
 export const getEquipoById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -36,38 +43,71 @@ export const getEquipoById = async (req, res) => {
         }
         res.json(result[0]);
     } catch (error) {
-        console.error('Error al obtener el equipo:', error);
+        console.error('[ERROR] getEquipoById:', error.message);
         res.status(500).json({ error: 'Error al obtener el equipo' });
     }
 };
 
+// ============================================================
+// CREAR EQUIPO
+// - Notifica al admin cuando cualquier usuario crea un equipo
+// ============================================================
 export const crearEquipo = async (req, res) => {
     try {
-        const { id_cliente, id_categoria_equipo, tipo_equipo, marca, modelo, numero_serie, observaciones } = req.body;  
+        const { id_cliente, id_categoria_equipo, tipo_equipo, marca, modelo, numero_serie, observaciones } = req.body;
         
+        // Obtener nombre del cliente para la notificación
+        const [clienteData] = await conmysql.query(
+            'SELECT nombre_completo FROM clientes WHERE id_cliente = ?',
+            [id_cliente]
+        );
+        const clienteNombre = clienteData[0]?.nombre_completo || 'Cliente';
+
         const [result] = await conmysql.query(
             'INSERT INTO equipos (id_cliente, id_categoria_equipo, tipo_equipo, marca, modelo, numero_serie, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?)',
             [id_cliente, id_categoria_equipo || null, tipo_equipo, marca, modelo, numero_serie, observaciones]
         );
+
+        // NOTIFICACIÓN: Nuevo equipo creado
+        try {
+            const usuarioNombre = req.user?.nombre || 'Tecnico';
+            await notificarNuevoEquipo(
+                conmysql,
+                { tipo_equipo, marca, modelo },
+                clienteNombre,
+                usuarioNombre
+            );
+            console.log('[FCM] Notificacion de nuevo equipo enviada al admin');
+        } catch (notifError) {
+            console.error('[ERROR] notificarNuevoEquipo:', notifError.message);
+        }
 
         res.status(201).json({ 
             mensaje: 'Equipo registrado con exito', 
             id_equipo: result.insertId 
         });
     } catch (error) {
-        console.error('Error al registrar el equipo:', error);
+        console.error('[ERROR] crearEquipo:', error.message);
         res.status(500).json({ error: 'Error al registrar el equipo. Verifica que el id_cliente exista.' });
     }
 };
 
+// ============================================================
+// ACTUALIZAR EQUIPO
+// - Notifica al admin cuando cualquier usuario edita un equipo
+// ============================================================
 export const actualizarEquipo = async (req, res) => {
     try {
         const { id } = req.params;
-        const { id_cliente, id_categoria_equipo, tipo_equipo, marca, modelo, numero_serie, observaciones } = req.body;  
+        const { id_cliente, id_categoria_equipo, tipo_equipo, marca, modelo, numero_serie, observaciones } = req.body;
         
-        console.log('Backend - Actualizando equipo ID:', id);
-        console.log('Backend - Datos recibidos:', req.body);
-        
+        // Obtener nombre del cliente para la notificación
+        const [clienteData] = await conmysql.query(
+            'SELECT nombre_completo FROM clientes WHERE id_cliente = ?',
+            [id_cliente]
+        );
+        const clienteNombre = clienteData[0]?.nombre_completo || 'Cliente';
+
         const [result] = await conmysql.query(
             'UPDATE equipos SET id_cliente = ?, id_categoria_equipo = ?, tipo_equipo = ?, marca = ?, modelo = ?, numero_serie = ?, observaciones = ? WHERE id_equipo = ?',
             [id_cliente, id_categoria_equipo || null, tipo_equipo, marca, modelo, numero_serie, observaciones, id]
@@ -77,14 +117,30 @@ export const actualizarEquipo = async (req, res) => {
             return res.status(404).json({ error: 'Equipo no encontrado' });
         }
 
+        // NOTIFICACIÓN: Equipo editado
+        try {
+            const usuarioNombre = req.user?.nombre || 'Tecnico';
+            await notificarEquipoEditado(
+                conmysql,
+                { tipo_equipo, marca, modelo },
+                clienteNombre,
+                usuarioNombre
+            );
+            console.log('[FCM] Notificacion de equipo editado enviada al admin');
+        } catch (notifError) {
+            console.error('[ERROR] notificarEquipoEditado:', notifError.message);
+        }
+
         res.json({ mensaje: 'Equipo actualizado con exito' });
     } catch (error) {
-        console.error('Error al actualizar el equipo:', error);
+        console.error('[ERROR] actualizarEquipo:', error.message);
         res.status(500).json({ error: 'Error al actualizar el equipo' });
     }
 };
 
-// ===== ELIMINAR EQUIPO =====
+// ============================================================
+// ELIMINAR EQUIPO (SOLO ADMIN)
+// ============================================================
 export const eliminarEquipo = async (req, res) => {
     try {
         const { id } = req.params;
@@ -112,7 +168,7 @@ export const eliminarEquipo = async (req, res) => {
 
         res.json({ mensaje: 'Equipo eliminado con éxito' });
     } catch (error) {
-        console.error('Error al eliminar equipo:', error);
+        console.error('[ERROR] eliminarEquipo:', error.message);
         res.status(500).json({ error: 'Error al eliminar el equipo' });
     }
 };

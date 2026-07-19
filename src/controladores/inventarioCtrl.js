@@ -1,10 +1,15 @@
 import { conmysql } from '../db.js';
-import { notificarStockBajo } from '../services/notification.service.js';
+import { 
+    notificarNuevoRepuesto, 
+    notificarRepuestoEditado, 
+    notificarStockBajo 
+} from '../services/notification.service.js';
 
-// 1. Obtener todo el inventario (con el nombre de su categoría)
+// ============================================================
+// OBTENER TODO EL INVENTARIO
+// ============================================================
 export const getInventario = async (req, res) => {
     try {
-        // Usamos un JOIN para traer el nombre de la categoría y no solo el ID
         const query = `
             SELECT i.*, c.nombre as categoria_nombre 
             FROM inventario i
@@ -14,12 +19,14 @@ export const getInventario = async (req, res) => {
         const [result] = await conmysql.query(query);
         res.json(result);
     } catch (error) {
-        console.error(error);
+        console.error('[ERROR] getInventario:', error.message);
         res.status(500).json({ error: 'Error al obtener el inventario' });
     }
 };
 
-// 2. Obtener un repuesto por ID
+// ============================================================
+// OBTENER REPUESTO POR ID
+// ============================================================
 export const getRepuestoById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -30,12 +37,16 @@ export const getRepuestoById = async (req, res) => {
         }
         res.json(result[0]);
     } catch (error) {
-        console.error(error);
+        console.error('[ERROR] getRepuestoById:', error.message);
         res.status(500).json({ error: 'Error al obtener el repuesto' });
     }
 };
 
-// 3. Agregar un nuevo repuesto al inventario
+// ============================================================
+// CREAR REPUESTO
+// - Notifica al admin cuando se crea un repuesto
+// - Notifica stock bajo si aplica
+// ============================================================
 export const crearRepuesto = async (req, res) => {
     try {
         const { id_categoria, nombre, descripcion, cantidad_stock, precio_unitario } = req.body;
@@ -45,18 +56,31 @@ export const crearRepuesto = async (req, res) => {
             [id_categoria, nombre, descripcion, cantidad_stock, precio_unitario]
         );
 
-        // NOTIFICACIÓN DE STOCK BAJO
+        // NOTIFICACIÓN: Nuevo repuesto creado
+        try {
+            const usuarioNombre = req.user?.nombre || 'Tecnico';
+            await notificarNuevoRepuesto(
+                conmysql,
+                { nombre, cantidad_stock, precio_unitario },
+                usuarioNombre
+            );
+            console.log('[FCM] Notificacion de nuevo repuesto enviada al admin');
+        } catch (notifError) {
+            console.error('[ERROR] notificarNuevoRepuesto:', notifError.message);
+        }
+
+        //NOTIFICACIÓN: Stock bajo (si aplica)
         if (cantidad_stock <= 3) {
             try {
                 await notificarStockBajo(
                     conmysql,
                     { id_repuesto: result.insertId, nombre: nombre },
                     cantidad_stock,
-                    req.user?.nombre || 'Tecnico',
-                    req.user?.id
+                    req.user?.nombre || 'Tecnico'
                 );
+                console.log('[FCM] Notificacion de stock bajo enviada al admin');
             } catch (notifError) {
-                console.error('[ERROR] Notificacion stock bajo:', notifError.message);
+                console.error('[ERROR] notificarStockBajo:', notifError.message);
             }
         }
 
@@ -65,24 +89,27 @@ export const crearRepuesto = async (req, res) => {
             id_repuesto: result.insertId 
         });
     } catch (error) {
-        console.error(error);
+        console.error('[ERROR] crearRepuesto:', error.message);
         res.status(500).json({ error: 'Error al registrar el repuesto' });
     }
 };
 
-//4. Obtener todas las categorías del inventario
+// ============================================================
+// OBTENER TODAS LAS CATEGORÍAS DEL INVENTARIO
+// ============================================================
 export const getCategorias = async (req, res) => {
     try {
-        // Hacemos la consulta a tu tabla categorias_inventario
         const [rows] = await conmysql.query('SELECT * FROM categorias_inventario');
         res.json(rows);
     } catch (error) {
-        console.error(error);
+        console.error('[ERROR] getCategorias:', error.message);
         res.status(500).json({ error: 'Error al consultar las categorías' });
     }
 };
 
-//5. Insertar una nueva categoría de inventario
+// ============================================================
+// CREAR CATEGORÍA (SOLO ADMIN)
+// ============================================================
 export const crearCategoria = async (req, res) => {
     try {
         const { nombre, descripcion } = req.body;
@@ -98,11 +125,14 @@ export const crearCategoria = async (req, res) => {
             id_categoria: result.insertId 
         });
     } catch (error) {
-        console.error(error);
+        console.error('[ERROR] crearCategoria:', error.message);
         res.status(500).json({ error: 'Error al crear la categoría' });
     }
 };
 
+// ============================================================
+// ACTUALIZAR CATEGORÍA (SOLO ADMIN)
+// ============================================================
 export const actualizarCategoria = async (req, res) => {
     try {
         const { id } = req.params;
@@ -113,12 +143,16 @@ export const actualizarCategoria = async (req, res) => {
         );
         res.json({ mensaje: 'Categoría actualizada con éxito' });
     } catch (error) {
-        console.error(error);
+        console.error('[ERROR] actualizarCategoria:', error.message);
         res.status(500).json({ error: 'Error al actualizar la categoría' });
     }
 };
 
-// Actualizar un repuesto
+// ============================================================
+// ACTUALIZAR REPUESTO
+// - Notifica al admin cuando se edita un repuesto
+// - Notifica stock bajo si aplica
+// ============================================================
 export const actualizarRepuesto = async (req, res) => {
     try {
         const { id } = req.params;
@@ -145,29 +179,44 @@ export const actualizarRepuesto = async (req, res) => {
             return res.status(404).json({ error: 'Repuesto no encontrado' });
         }
 
-        //NOTIFICACIÓN DE STOCK BAJO (solo si bajó a ≤ 3 y antes estaba > 3)
+        // NOTIFICACIÓN: Repuesto editado
+        try {
+            const usuarioNombre = req.user?.nombre || 'Tecnico';
+            await notificarRepuestoEditado(
+                conmysql,
+                { nombre, cantidad_stock, precio_unitario },
+                usuarioNombre
+            );
+            console.log('[FCM] Notificacion de repuesto editado enviada al admin');
+        } catch (notifError) {
+            console.error('[ERROR] notificarRepuestoEditado:', notifError.message);
+        }
+
+        // NOTIFICACIÓN: Stock bajo (solo si bajó a ≤ 3 y antes estaba > 3)
         if (cantidad_stock <= 3 && stockAnterior > 3) {
             try {
                 await notificarStockBajo(
                     conmysql,
                     { id_repuesto: id, nombre: nombre },
                     cantidad_stock,
-                    req.user?.nombre || 'Tecnico',
-                    req.user?.id
+                    req.user?.nombre || 'Tecnico'
                 );
+                console.log('[FCM] Notificacion de stock bajo enviada al admin');
             } catch (notifError) {
-                console.error('[ERROR] Notificacion stock bajo:', notifError.message);
+                console.error('[ERROR] notificarStockBajo:', notifError.message);
             }
         }
 
         res.json({ mensaje: 'Repuesto actualizado con éxito' });
     } catch (error) {
-        console.error(error);
+        console.error('[ERROR] actualizarRepuesto:', error.message);
         res.status(500).json({ error: 'Error al actualizar el repuesto' });
     }
 };
 
-// ===== ELIMINAR REPUESTO =====
+// ============================================================
+// ELIMINAR REPUESTO (SOLO ADMIN)
+// ============================================================
 export const eliminarRepuesto = async (req, res) => {
     try {
         const { id } = req.params;
@@ -195,13 +244,14 @@ export const eliminarRepuesto = async (req, res) => {
 
         res.json({ mensaje: 'Repuesto eliminado con éxito' });
     } catch (error) {
-        console.error('Error al eliminar repuesto:', error);
+        console.error('[ERROR] eliminarRepuesto:', error.message);
         res.status(500).json({ error: 'Error al eliminar el repuesto' });
     }
 };
 
-
-// ===== ELIMINAR CATEGORÍA =====
+// ============================================================
+// ELIMINAR CATEGORÍA (SOLO ADMIN)
+// ============================================================
 export const eliminarCategoria = async (req, res) => {
     try {
         const { id } = req.params;
@@ -229,7 +279,7 @@ export const eliminarCategoria = async (req, res) => {
 
         res.json({ mensaje: 'Categoría eliminada con éxito' });
     } catch (error) {
-        console.error('Error al eliminar categoría:', error);
+        console.error('[ERROR] eliminarCategoria:', error.message);
         res.status(500).json({ error: 'Error al eliminar la categoría' });
     }
 };

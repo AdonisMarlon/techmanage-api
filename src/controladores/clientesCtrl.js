@@ -1,17 +1,22 @@
 import { conmysql } from '../db.js';
+import { notificarNuevoCliente, notificarClienteEditado } from '../services/notification.service.js';
 
-// 1. Obtener todos los clientes
+// ============================================================
+// OBTENER TODOS LOS CLIENTES
+// ============================================================
 export const getClientes = async (req, res) => {
     try {
         const [result] = await conmysql.query('SELECT * FROM clientes ORDER BY fecha_registro DESC');
         res.json(result);
     } catch (error) {
-        console.error(error);
+        console.error('[ERROR] getClientes:', error.message);
         res.status(500).json({ error: 'Error al obtener los clientes' });
     }
 };
 
-// 2. Obtener un cliente por su ID
+// ============================================================
+// OBTENER CLIENTE POR ID
+// ============================================================
 export const getClienteById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -22,57 +27,87 @@ export const getClienteById = async (req, res) => {
         }
         res.json(result[0]);
     } catch (error) {
-        console.error(error);
+        console.error('[ERROR] getClienteById:', error.message);
         res.status(500).json({ error: 'Error al obtener el cliente' });
     }
 };
 
-// 3. Crear un nuevo cliente
+// ============================================================
+// CREAR CLIENTE
+// - Notifica al admin cuando cualquier usuario crea un cliente
+// ============================================================
 export const crearCliente = async (req, res) => {
     try {
         const { cedula, nombre_completo, telefono, correo, direccion } = req.body;
         
-        // Insertar en la base de datos
         const [result] = await conmysql.query(
             'INSERT INTO clientes (cedula, nombre_completo, telefono, correo, direccion) VALUES (?, ?, ?, ?, ?)',
             [cedula, nombre_completo, telefono, correo, direccion]
         );
+
+        // NOTIFICACIÓN: Nuevo cliente creado
+        try {
+            const usuarioNombre = req.user?.nombre || 'Tecnico';
+            await notificarNuevoCliente(conmysql, { nombre_completo, cedula }, usuarioNombre);
+            console.log('[FCM] Notificacion de nuevo cliente enviada al admin');
+        } catch (notifError) {
+            console.error('[ERROR] notificarNuevoCliente:', notifError.message);
+        }
 
         res.status(201).json({ 
             mensaje: 'Cliente registrado con éxito', 
             id_cliente: result.insertId 
         });
     } catch (error) {
-        console.error(error);
+        console.error('[ERROR] crearCliente:', error.message);
         res.status(500).json({ error: 'Error al registrar el cliente. Verifica que la cédula no esté duplicada.' });
     }
-    
 };
 
-// 4. Actualizar datos de un cliente
+// ============================================================
+// ACTUALIZAR CLIENTE
+// - Notifica al admin cuando cualquier usuario edita un cliente
+// ============================================================
 export const actualizarCliente = async (req, res) => {
     try {
         const { id } = req.params;
         const { nombre_completo, telefono, correo, direccion } = req.body;
         
+        // Obtener datos anteriores para la notificación
+        const [clienteAnterior] = await conmysql.query(
+            'SELECT nombre_completo, cedula FROM clientes WHERE id_cliente = ?',
+            [id]
+        );
+
         await conmysql.query(
             'UPDATE clientes SET nombre_completo = ?, telefono = ?, correo = ?, direccion = ? WHERE id_cliente = ?',
             [nombre_completo, telefono, correo, direccion, id]
         );
 
+        // NOTIFICACIÓN: Cliente editado
+        try {
+            const usuarioNombre = req.user?.nombre || 'Tecnico';
+            const cedula = clienteAnterior[0]?.cedula || 'N/A';
+            await notificarClienteEditado(conmysql, { nombre_completo, cedula }, usuarioNombre);
+            console.log('[FCM] Notificacion de cliente editado enviada al admin');
+        } catch (notifError) {
+            console.error('[ERROR] notificarClienteEditado:', notifError.message);
+        }
+
         res.json({ mensaje: 'Cliente actualizado con éxito' });
     } catch (error) {
-        console.error(error);
+        console.error('[ERROR] actualizarCliente:', error.message);
         res.status(500).json({ error: 'Error al actualizar el cliente' });
     }
 };
 
-// ==================== BUSCAR CLIENTES ====================
+// ============================================================
+// BUSCAR CLIENTES
+// ============================================================
 export const buscarClientes = async (req, res) => {
     try {
         const { q } = req.query;
         
-        // Si no hay término de búsqueda, devolver array vacío
         if (!q || q.trim() === '') {
             return res.json([]);
         }
@@ -89,12 +124,14 @@ export const buscarClientes = async (req, res) => {
         );
         res.json(result);
     } catch (error) {
-        console.error('Error al buscar clientes:', error);
+        console.error('[ERROR] buscarClientes:', error.message);
         res.status(500).json({ error: 'Error al buscar clientes' });
     }
 };
 
-// ===== ELIMINAR CLIENTE =====
+// ============================================================
+// ELIMINAR CLIENTE (SOLO ADMIN)
+// ============================================================
 export const eliminarCliente = async (req, res) => {
     try {
         const { id } = req.params;
@@ -122,7 +159,7 @@ export const eliminarCliente = async (req, res) => {
 
         res.json({ mensaje: 'Cliente eliminado con éxito' });
     } catch (error) {
-        console.error('Error al eliminar cliente:', error);
+        console.error('[ERROR] eliminarCliente:', error.message);
         res.status(500).json({ error: 'Error al eliminar el cliente' });
     }
 };

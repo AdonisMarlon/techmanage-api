@@ -1,7 +1,13 @@
 import { conmysql } from '../db.js';
-import { notificarNuevaOrden, notificarCambioEstado, notificarAsignacionTecnico } from '../services/notification.service.js';
+import { 
+    notificarNuevaOrden, 
+    notificarCambioEstado, 
+    notificarAsignacionTecnico 
+} from '../services/notification.service.js';
 
-// 1. Obtener todas las órdenes 
+// ============================================================
+// 1. OBTENER TODAS LAS ÓRDENES
+// ============================================================
 export const getOrdenes = async (req, res) => {
     try {
         const query = `
@@ -31,7 +37,9 @@ export const getOrdenes = async (req, res) => {
     }
 };
 
-// 2. Obtener una orden específica por su ID
+// ============================================================
+// 2. OBTENER ORDEN POR ID
+// ============================================================
 export const getOrdenById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -66,10 +74,15 @@ export const getOrdenById = async (req, res) => {
     }
 };
 
-// 3. Crear una nueva orden de trabajo
+// ============================================================
+// 3. CREAR ORDEN
+// - Notifica al técnico asignado
+// - Notifica al admin
+// ============================================================
 export const crearOrden = async (req, res) => {
     try {
         const { id_cliente, id_equipo, id_tecnico, problema_reportado, diagnostico_tecnico } = req.body;
+        const tecnicoNombre = req.user?.nombre || 'Tecnico';
 
         const fecha = new Date();
         const año = String(fecha.getFullYear()).slice(-2);
@@ -101,29 +114,31 @@ export const crearOrden = async (req, res) => {
             [codigo_orden, id_cliente, id_equipo, id_tecnico, problema_reportado, diagnostico_tecnico || null]
         );
 
-        // Notificación de nueva orden al técnico asignado
+        // Obtener datos para la notificación
+        const [clienteData] = await conmysql.query(
+            'SELECT nombre_completo FROM clientes WHERE id_cliente = ?',
+            [id_cliente]
+        );
+        const clienteNombre = clienteData[0]?.nombre_completo || 'Cliente';
+
+        const [equipoData] = await conmysql.query(
+            'SELECT tipo_equipo FROM equipos WHERE id_equipo = ?',
+            [id_equipo]
+        );
+        const equipoTipo = equipoData[0]?.tipo_equipo || 'Equipo';
+
+        const ordenData = {
+            id_orden: result.insertId,
+            codigo_orden: codigo_orden,
+            tipo_equipo: equipoTipo
+        };
+
+        // NOTIFICACIÓN: Al técnico asignado
         try {
-            const [clienteData] = await conmysql.query(
-                'SELECT nombre_completo FROM clientes WHERE id_cliente = ?',
-                [id_cliente]
-            );
-            const clienteNombre = clienteData[0]?.nombre_completo || 'Cliente';
-
-            const [equipoData] = await conmysql.query(
-                'SELECT tipo_equipo FROM equipos WHERE id_equipo = ?',
-                [id_equipo]
-            );
-            const equipoTipo = equipoData[0]?.tipo_equipo || 'Equipo';
-
-            const ordenData = {
-                id_orden: result.insertId,
-                codigo_orden: codigo_orden,
-                tipo_equipo: equipoTipo
-            };
-
-            await notificarNuevaOrden(conmysql, ordenData, clienteNombre, id_tecnico);
+            await notificarNuevaOrden(conmysql, ordenData, clienteNombre, id_tecnico, tecnicoNombre);
+            console.log(`[FCM] Notificacion nueva orden enviada al tecnico ${id_tecnico}`);
         } catch (notificationError) {
-            console.error('[ERROR] Notificacion nueva orden:', notificationError.message);
+            console.error('[ERROR] Notificacion nueva orden (tecnico):', notificationError.message);
         }
 
         res.status(201).json({
@@ -138,13 +153,18 @@ export const crearOrden = async (req, res) => {
     }
 };
 
-// 4. Actualizar el estado de la orden
+// ============================================================
+// 4. ACTUALIZAR ESTADO DE LA ORDEN
+// - Notifica al técnico asignado
+// - Notifica al admin
+// ============================================================
 export const actualizarEstadoOrden = async (req, res) => {
     try {
         const { id } = req.params;
         const { estado_reparacion, diagnostico_tecnico } = req.body;
         const userId = req.user.id;
         const userRol = req.user.rol;
+        const usuarioNombre = req.user?.nombre || 'Tecnico';
 
         const [orden] = await conmysql.query(
             'SELECT id_tecnico, estado_reparacion FROM ordenes_trabajo WHERE id_orden = ?',
@@ -211,35 +231,37 @@ export const actualizarEstadoOrden = async (req, res) => {
             return res.status(404).json({ error: 'Orden no encontrada' });
         }
 
-        // Notificación de cambio de estado al técnico asignado
-        try {
-            const [clienteData] = await conmysql.query(
-                'SELECT nombre_completo FROM clientes WHERE id_cliente = (SELECT id_cliente FROM ordenes_trabajo WHERE id_orden = ?)',
-                [id]
-            );
-            const clienteNombre = clienteData[0]?.nombre_completo || 'Cliente';
-            
-            const [ordenData] = await conmysql.query(
-                'SELECT codigo_orden FROM ordenes_trabajo WHERE id_orden = ?',
-                [id]
-            );
-            
-            const [tecnicoData] = await conmysql.query(
-                'SELECT id_tecnico FROM ordenes_trabajo WHERE id_orden = ?',
-                [id]
-            );
-            const tecnicoId = tecnicoData[0]?.id_tecnico;
-            
-            const ordenNotif = {
-                id_orden: id,
-                codigo_orden: ordenData[0]?.codigo_orden || 'N/A'
-            };
-            
-            if (tecnicoId) {
-                await notificarCambioEstado(conmysql, ordenNotif, clienteNombre, estado_reparacion, tecnicoId);
+        // Obtener datos para la notificación
+        const [clienteData] = await conmysql.query(
+            'SELECT nombre_completo FROM clientes WHERE id_cliente = (SELECT id_cliente FROM ordenes_trabajo WHERE id_orden = ?)',
+            [id]
+        );
+        const clienteNombre = clienteData[0]?.nombre_completo || 'Cliente';
+        
+        const [ordenData] = await conmysql.query(
+            'SELECT codigo_orden FROM ordenes_trabajo WHERE id_orden = ?',
+            [id]
+        );
+        
+        const [tecnicoData] = await conmysql.query(
+            'SELECT id_tecnico FROM ordenes_trabajo WHERE id_orden = ?',
+            [id]
+        );
+        const tecnicoId = tecnicoData[0]?.id_tecnico;
+        
+        const ordenNotif = {
+            id_orden: id,
+            codigo_orden: ordenData[0]?.codigo_orden || 'N/A'
+        };
+        
+        // NOTIFICACIÓN: Al técnico asignado
+        if (tecnicoId) {
+            try {
+                await notificarCambioEstado(conmysql, ordenNotif, clienteNombre, estado_reparacion, tecnicoId, usuarioNombre);
+                console.log(`[FCM] Notificacion cambio estado enviada al tecnico ${tecnicoId}`);
+            } catch (notificationError) {
+                console.error('[ERROR] Notificacion cambio estado (tecnico):', notificationError.message);
             }
-        } catch (notificationError) {
-            console.error('[ERROR] Notificacion cambio estado:', notificationError.message);
         }
 
         res.json({
@@ -252,13 +274,18 @@ export const actualizarEstadoOrden = async (req, res) => {
     }
 };
 
-// 5. Actualizar datos de la orden (editar)
+// ============================================================
+// 5. ACTUALIZAR DATOS DE LA ORDEN (EDITAR)
+// - Notifica al nuevo técnico si cambia
+// - Notifica al admin
+// ============================================================
 export const actualizarOrden = async (req, res) => {
     try {
         const { id } = req.params;
         const { id_tecnico, problema_reportado, diagnostico_tecnico } = req.body;
         const userId = req.user.id;
         const userRol = req.user.rol;
+        const usuarioNombre = req.user?.nombre || 'Tecnico';
 
         const [orden] = await conmysql.query(
             'SELECT id_tecnico FROM ordenes_trabajo WHERE id_orden = ?',
@@ -286,16 +313,37 @@ export const actualizarOrden = async (req, res) => {
             return res.status(404).json({ error: 'Orden no encontrada' });
         }
 
-        // Notificación de asignación al nuevo técnico (si cambió)
-        try {
-            const [ordenAntes] = await conmysql.query(
-                'SELECT id_tecnico FROM ordenes_trabajo WHERE id_orden = ?',
-                [id]
-            );
-            
-            const tecnicoAnterior = ordenAntes[0]?.id_tecnico;
-            
-            if (tecnicoAnterior !== id_tecnico) {
+        // Obtener datos para la notificación de asignación
+        const [ordenAntes] = await conmysql.query(
+            'SELECT id_tecnico FROM ordenes_trabajo WHERE id_orden = ?',
+            [id]
+        );
+        
+        const tecnicoAnterior = ordenAntes[0]?.id_tecnico;
+        
+        // ✅ NOTIFICACIÓN: Si cambió el técnico
+        if (tecnicoAnterior !== id_tecnico) {
+            try {
+                // Obtener nombre del técnico anterior
+                let tecnicoAnteriorNombre = 'Sin técnico';
+                if (tecnicoAnterior) {
+                    const [tecnicoAnt] = await conmysql.query(
+                        'SELECT nombre FROM usuarios WHERE id_usuario = ?',
+                        [tecnicoAnterior]
+                    );
+                    tecnicoAnteriorNombre = tecnicoAnt[0]?.nombre || 'Técnico anterior';
+                }
+
+                // Obtener nombre del nuevo técnico
+                let nuevoTecnicoNombre = 'Técnico';
+                if (id_tecnico) {
+                    const [tecnicoNuevo] = await conmysql.query(
+                        'SELECT nombre FROM usuarios WHERE id_usuario = ?',
+                        [id_tecnico]
+                    );
+                    nuevoTecnicoNombre = tecnicoNuevo[0]?.nombre || 'Técnico';
+                }
+
                 const [clienteData] = await conmysql.query(
                     'SELECT nombre_completo FROM clientes WHERE id_cliente = (SELECT id_cliente FROM ordenes_trabajo WHERE id_orden = ?)',
                     [id]
@@ -312,10 +360,18 @@ export const actualizarOrden = async (req, res) => {
                     codigo_orden: ordenData[0]?.codigo_orden || 'N/A'
                 };
                 
-                await notificarAsignacionTecnico(conmysql, ordenNotif, clienteNombre, id_tecnico);
+                await notificarAsignacionTecnico(
+                    conmysql, 
+                    ordenNotif, 
+                    clienteNombre, 
+                    id_tecnico, 
+                    nuevoTecnicoNombre, 
+                    tecnicoAnteriorNombre
+                );
+                console.log(`[FCM] Notificacion asignacion enviada al tecnico ${id_tecnico}`);
+            } catch (notificationError) {
+                console.error('[ERROR] Notificacion asignacion:', notificationError.message);
             }
-        } catch (notificationError) {
-            console.error('[ERROR] Notificacion asignacion:', notificationError.message);
         }
 
         res.json({ mensaje: 'Orden actualizada con exito' });

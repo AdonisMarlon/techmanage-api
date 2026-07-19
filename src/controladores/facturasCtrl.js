@@ -1,6 +1,15 @@
 import { conmysql } from '../db.js';
+import { 
+    notificarRepuestoAgregado, 
+    notificarServicioAgregado, 
+    notificarNuevoAbono, 
+    notificarFacturaGenerada 
+} from '../services/notification.service.js';
 
-// 1. Agregar un Repuesto a la Orden de Trabajo (Detalle Reparación)
+// ============================================================
+// 1. AGREGAR REPUESTO A ORDEN
+// - Notifica al admin cuando se agrega un repuesto
+// ============================================================
 export const agregarRepuestoAOrden = async (req, res) => {
     const conexion = await conmysql.getConnection();
     
@@ -26,6 +35,13 @@ export const agregarRepuestoAOrden = async (req, res) => {
             });
         }
 
+        // Obtener nombre del repuesto para la notificación
+        const [repuestoData] = await conexion.query(
+            'SELECT nombre FROM inventario WHERE id_repuesto = ?',
+            [id_repuesto]
+        );
+        const repuestoNombre = repuestoData[0]?.nombre || 'Repuesto';
+
         await conexion.beginTransaction();
 
         // Insertar detalle
@@ -42,17 +58,35 @@ export const agregarRepuestoAOrden = async (req, res) => {
 
         await conexion.commit();
 
+        // NOTIFICACIÓN: Repuesto agregado a orden
+        try {
+            const tecnicoNombre = req.user?.nombre || 'Tecnico';
+            await notificarRepuestoAgregado(
+                conexion,
+                { id_orden, codigo_orden: orden[0]?.codigo_orden || 'N/A' },
+                repuestoNombre,
+                cantidad_usada,
+                tecnicoNombre
+            );
+            console.log('[FCM] Notificacion de repuesto agregado enviada al admin');
+        } catch (notifError) {
+            console.error('[ERROR] notificarRepuestoAgregado:', notifError.message);
+        }
+
         res.status(201).json({ mensaje: 'Repuesto agregado y stock actualizado' });
     } catch (error) {
         await conexion.rollback();
-        console.error(error);
+        console.error('[ERROR] agregarRepuestoAOrden:', error.message);
         res.status(500).json({ error: 'Error al agregar el repuesto a la orden' });
     } finally {
         conexion.release();
     }
 };
 
-// 2. Agregar un Servicio (Mano de obra) a la Orden
+// ============================================================
+// 2. AGREGAR SERVICIO A ORDEN
+// - Notifica al admin cuando se agrega un servicio
+// ============================================================
 export const agregarServicioAOrden = async (req, res) => {
     try {
         const { id_orden, id_servicio, precio_aplicado } = req.body;
@@ -76,19 +110,43 @@ export const agregarServicioAOrden = async (req, res) => {
             });
         }
 
+        // Obtener nombre del servicio para la notificación
+        const [servicioData] = await conmysql.query(
+            'SELECT nombre FROM servicios WHERE id_servicio = ?',
+            [id_servicio]
+        );
+        const servicioNombre = servicioData[0]?.nombre || 'Servicio';
+
         await conmysql.query(
             'INSERT INTO detalles_servicios (id_orden, id_servicio, precio_aplicado) VALUES (?, ?, ?)',
             [id_orden, id_servicio, precio_aplicado]
         );
 
+        // NOTIFICACIÓN: Servicio agregado a orden
+        try {
+            const tecnicoNombre = req.user?.nombre || 'Tecnico';
+            await notificarServicioAgregado(
+                conmysql,
+                { id_orden, codigo_orden: orden[0]?.codigo_orden || 'N/A' },
+                servicioNombre,
+                tecnicoNombre
+            );
+            console.log('[FCM] Notificacion de servicio agregado enviada al admin');
+        } catch (notifError) {
+            console.error('[ERROR] notificarServicioAgregado:', notifError.message);
+        }
+
         res.status(201).json({ mensaje: 'Servicio agregado a la orden' });
     } catch (error) {
-        console.error(error);
+        console.error('[ERROR] agregarServicioAOrden:', error.message);
         res.status(500).json({ error: 'Error al agregar el servicio' });
     }
 };
 
-// 3. Registrar un Abono (Anticipo del cliente)
+// ============================================================
+// 3. REGISTRAR ABONO
+// - Notifica al admin cuando se registra un abono
+// ============================================================
 export const registrarAbono = async (req, res) => {
     try {
         const { id_orden, monto, metodo_pago, observacion } = req.body;
@@ -112,19 +170,47 @@ export const registrarAbono = async (req, res) => {
             });
         }
 
+        // Obtener datos para la notificación
+        const [ordenData] = await conmysql.query(
+            `SELECT o.codigo_orden, c.nombre_completo as cliente
+            FROM ordenes_trabajo o
+            INNER JOIN clientes c ON o.id_cliente = c.id_cliente
+            WHERE o.id_orden = ?`,
+            [id_orden]
+        );
+
         await conmysql.query(
             'INSERT INTO abonos (id_orden, monto, metodo_pago, observacion) VALUES (?, ?, ?, ?)',
             [id_orden, monto, metodo_pago, observacion]
         );
 
+        // NOTIFICACIÓN: Nuevo abono registrado
+        try {
+            const tecnicoNombre = req.user?.nombre || 'Tecnico';
+            if (ordenData.length > 0) {
+                await notificarNuevoAbono(
+                    conmysql,
+                    { id_orden, codigo_orden: ordenData[0].codigo_orden },
+                    monto,
+                    ordenData[0].cliente,
+                    tecnicoNombre
+                );
+                console.log('[FCM] Notificacion de abono enviada al admin');
+            }
+        } catch (notifError) {
+            console.error('[ERROR] notificarNuevoAbono:', notifError.message);
+        }
+
         res.status(201).json({ mensaje: 'Abono registrado con éxito' });
     } catch (error) {
-        console.error(error);
+        console.error('[ERROR] registrarAbono:', error.message);
         res.status(500).json({ error: 'Error al registrar el abono' });
     }
 };
 
+// ============================================================
 // OBTENER FACTURA DE UNA ORDEN
+// ============================================================
 export const getFacturaByOrden = async (req, res) => {
     try {
         const { id } = req.params;
@@ -137,12 +223,16 @@ export const getFacturaByOrden = async (req, res) => {
         }
         res.json(result[0]);
     } catch (error) {
-        console.error('Error al obtener factura:', error);
+        console.error('[ERROR] getFacturaByOrden:', error.message);
         res.status(500).json({ error: 'Error al obtener la factura' });
     }
 };
 
+// ============================================================
 // GENERAR FACTURA
+// - Notifica al admin cuando se genera una factura
+// - También notifica cambio de estado a "Entregado"
+// ============================================================
 export const generarFactura = async (req, res) => {
     const conexion = await conmysql.getConnection();
     
@@ -186,6 +276,15 @@ export const generarFactura = async (req, res) => {
         if (facturaExistente.length > 0) {
             return res.status(400).json({ error: 'Esta orden ya tiene una factura' });
         }
+        
+        // Obtener datos para la notificación
+        const [ordenData] = await conexion.query(
+            `SELECT o.codigo_orden, c.nombre_completo as cliente
+            FROM ordenes_trabajo o
+            INNER JOIN clientes c ON o.id_cliente = c.id_cliente
+            WHERE o.id_orden = ?`,
+            [id_orden]
+        );
         
         // GENERAR NÚMERO DE FACTURA SECUENCIAL
         const fecha = new Date();
@@ -233,6 +332,24 @@ export const generarFactura = async (req, res) => {
         );
         
         await conexion.commit();
+
+        // NOTIFICACIÓN: Factura generada
+        try {
+            const tecnicoNombre = req.user?.nombre || 'Tecnico';
+            if (ordenData.length > 0) {
+                await notificarFacturaGenerada(
+                    conexion,
+                    { id_orden, codigo_orden: ordenData[0].codigo_orden },
+                    total_final,
+                    ordenData[0].cliente,
+                    numero_factura,
+                    tecnicoNombre
+                );
+                console.log('[FCM] Notificacion de factura enviada al admin');
+            }
+        } catch (notifError) {
+            console.error('[ERROR] notificarFacturaGenerada:', notifError.message);
+        }
         
         res.status(201).json({ 
             mensaje: 'Factura generada correctamente',
@@ -242,7 +359,7 @@ export const generarFactura = async (req, res) => {
         
     } catch (error) {
         await conexion.rollback();
-        console.error('Error al generar factura:', error);
+        console.error('[ERROR] generarFactura:', error.message);
         res.status(500).json({ error: 'Error al generar la factura' });
     } finally {
         conexion.release();

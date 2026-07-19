@@ -1,7 +1,8 @@
 import { conmysql } from '../db.js';
-import { notificarSolicitudTipoEquipo } from '../services/notification.service.js';
 
-// ==================== OBTENER TODAS LAS CATEGORÍAS ====================
+// ============================================================
+// OBTENER TODAS LAS CATEGORÍAS
+// ============================================================
 export const getCategoriasEquipos = async (req, res) => {
     try {
         const [result] = await conmysql.query(
@@ -14,7 +15,9 @@ export const getCategoriasEquipos = async (req, res) => {
     }
 };
 
-// ==================== OBTENER CATEGORÍA POR ID ====================
+// ============================================================
+// OBTENER CATEGORÍA POR ID
+// ============================================================
 export const getCategoriaEquipoById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -32,7 +35,9 @@ export const getCategoriaEquipoById = async (req, res) => {
     }
 };
 
-// ==================== CREAR CATEGORÍA ====================
+// ============================================================
+// CREAR CATEGORÍA (SOLO ADMIN)
+// ============================================================
 export const crearCategoriaEquipo = async (req, res) => {
     try {
         const { nombre, descripcion, icono } = req.body;
@@ -46,15 +51,9 @@ export const crearCategoriaEquipo = async (req, res) => {
             [nombre.trim(), descripcion || '', icono || 'hardware-chip-outline']
         );
 
-        //NOTIFICACIÓN: Si el usuario es TECNICO, notificar al admin que solicitó un nuevo tipo
-        if (req.user.rol === 'TECNICO') {
-            try {
-                await notificarSolicitudTipoEquipo(conmysql, nombre, req.user.nombre || 'Tecnico');
-                console.log('[FCM] Solicitud de tipo de equipo enviada al admin');
-            } catch (notifError) {
-                console.error('[ERROR] notificarSolicitudTipoEquipo:', notifError.message);
-            }
-        }
+        // NOTA: Los técnicos NO pueden crear categorías.
+        // Los técnicos usan el sistema de solicitudes (solicitudesCtrl.js)
+        // Las notificaciones de solicitudes se envían desde allí.
 
         res.status(201).json({
             mensaje: 'Categoría creada con éxito',
@@ -69,7 +68,9 @@ export const crearCategoriaEquipo = async (req, res) => {
     }
 };
 
-// ==================== ACTUALIZAR CATEGORÍA ====================
+// ============================================================
+// ACTUALIZAR CATEGORÍA (SOLO ADMIN)
+// ============================================================
 export const actualizarCategoriaEquipo = async (req, res) => {
     try {
         const { id } = req.params;
@@ -94,11 +95,14 @@ export const actualizarCategoriaEquipo = async (req, res) => {
     }
 };
 
-// ==================== ELIMINAR CATEGORÍA ====================
+// ============================================================
+// ELIMINAR CATEGORÍA (SOLO ADMIN)
+// ============================================================
 export const eliminarCategoriaEquipo = async (req, res) => {
     try {
         const { id } = req.params;
 
+        // Verificar si tiene equipos asociados
         const [equipos] = await conmysql.query(
             'SELECT COUNT(*) as total FROM equipos WHERE id_categoria_equipo = ?',
             [id]

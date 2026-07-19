@@ -237,28 +237,7 @@ export const notificarRepuestoEditado = async (conmysql, repuesto, usuarioNombre
 };
 
 // ============================================================
-// 16. NUEVO TIPO DE EQUIPO (SOLICITUD)
-// ============================================================
-export const notificarSolicitudTipoEquipo = async (conmysql, tipoNombre, tecnicoNombre) => {
-    const title = `📋 Solicitud de nuevo tipo de equipo`;
-    const body = `Técnico ${tecnicoNombre} solicita crear tipo: "${tipoNombre}"`;
-    const data = { tipo: 'categoria_equipo' };
-    await notificarAdmins(conmysql, title, body, data);
-};
-
-// ============================================================
-// 17. NUEVO USUARIO REGISTRADO
-// ============================================================
-export const notificarNuevoUsuario = async (conmysql, usuario, adminNombre) => {
-    const title = `👤 Nuevo usuario registrado`;
-    const body = `${adminNombre} registró a "${usuario.nombre}" como ${usuario.rol}`;
-    const data = { tipo: 'usuario' };
-    await notificarAdmins(conmysql, title, body, data);
-};
-
-
-// ============================================================
-// SOLICITUD DE REPUESTO (Técnico → Admin)
+// 15. SOLICITUD DE REPUESTO (Técnico → Admin)
 // ============================================================
 export const notificarSolicitudRepuesto = async (conmysql, solicitud, tecnicoNombre) => {
     const title = `📦 Solicitud de repuesto: "${solicitud.nombre}"`;
@@ -268,7 +247,7 @@ export const notificarSolicitudRepuesto = async (conmysql, solicitud, tecnicoNom
 };
 
 // ============================================================
-// SOLICITUD DE SERVICIO (Técnico → Admin)
+// 16. SOLICITUD DE SERVICIO (Técnico → Admin)
 // ============================================================
 export const notificarSolicitudServicio = async (conmysql, solicitud, tecnicoNombre) => {
     const title = `🛠️ Solicitud de servicio: "${solicitud.nombre}"`;
@@ -278,11 +257,21 @@ export const notificarSolicitudServicio = async (conmysql, solicitud, tecnicoNom
 };
 
 // ============================================================
-// SOLICITUD DE TIPO DE EQUIPO (Técnico → Admin)
+// 17. SOLICITUD DE TIPO DE EQUIPO (Técnico → Admin)
 // ============================================================
 export const notificarSolicitudTipoEquipo = async (conmysql, solicitud, tecnicoNombre) => {
     const title = `📋 Solicitud de tipo de equipo: "${solicitud.nombre}"`;
     const body = `Técnico ${tecnicoNombre} solicita nuevo tipo de equipo`;
     const data = { tipo: 'solicitud_tipo_equipo', id_solicitud: String(solicitud.id_solicitud) };
+    await notificarAdmins(conmysql, title, body, data);
+};
+
+// ============================================================
+// 18. NUEVO USUARIO REGISTRADO
+// ============================================================
+export const notificarNuevoUsuario = async (conmysql, usuario, adminNombre) => {
+    const title = `👤 Nuevo usuario registrado`;
+    const body = `${adminNombre} registró a "${usuario.nombre}" como ${usuario.rol}`;
+    const data = { tipo: 'usuario' };
     await notificarAdmins(conmysql, title, body, data);
 };

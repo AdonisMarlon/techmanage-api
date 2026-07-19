@@ -1,4 +1,5 @@
 import { conmysql } from '../db.js';
+import { notificarStockBajo } from '../services/notification.service.js';
 
 // 1. Obtener todo el inventario (con el nombre de su categoría)
 export const getInventario = async (req, res) => {
@@ -43,6 +44,21 @@ export const crearRepuesto = async (req, res) => {
             'INSERT INTO inventario (id_categoria, nombre, descripcion, cantidad_stock, precio_unitario) VALUES (?, ?, ?, ?, ?)',
             [id_categoria, nombre, descripcion, cantidad_stock, precio_unitario]
         );
+
+        // NOTIFICACIÓN DE STOCK BAJO
+        if (cantidad_stock <= 3) {
+            try {
+                await notificarStockBajo(
+                    conmysql,
+                    { id_repuesto: result.insertId, nombre: nombre },
+                    cantidad_stock,
+                    req.user?.nombre || 'Tecnico',
+                    req.user?.id
+                );
+            } catch (notifError) {
+                console.error('[ERROR] Notificacion stock bajo:', notifError.message);
+            }
+        }
 
         res.status(201).json({ 
             mensaje: 'Repuesto registrado con éxito', 
@@ -108,6 +124,18 @@ export const actualizarRepuesto = async (req, res) => {
         const { id } = req.params;
         const { id_categoria, nombre, descripcion, cantidad_stock, precio_unitario } = req.body;
         
+        // Obtener el stock anterior para comparar
+        const [repuestoAnterior] = await conmysql.query(
+            'SELECT cantidad_stock FROM inventario WHERE id_repuesto = ?',
+            [id]
+        );
+
+        if (repuestoAnterior.length === 0) {
+            return res.status(404).json({ error: 'Repuesto no encontrado' });
+        }
+
+        const stockAnterior = repuestoAnterior[0].cantidad_stock;
+
         const [result] = await conmysql.query(
             'UPDATE inventario SET id_categoria = ?, nombre = ?, descripcion = ?, cantidad_stock = ?, precio_unitario = ? WHERE id_repuesto = ?',
             [id_categoria, nombre, descripcion, cantidad_stock, precio_unitario, id]
@@ -115,6 +143,21 @@ export const actualizarRepuesto = async (req, res) => {
 
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: 'Repuesto no encontrado' });
+        }
+
+        //NOTIFICACIÓN DE STOCK BAJO (solo si bajó a ≤ 3 y antes estaba > 3)
+        if (cantidad_stock <= 3 && stockAnterior > 3) {
+            try {
+                await notificarStockBajo(
+                    conmysql,
+                    { id_repuesto: id, nombre: nombre },
+                    cantidad_stock,
+                    req.user?.nombre || 'Tecnico',
+                    req.user?.id
+                );
+            } catch (notifError) {
+                console.error('[ERROR] Notificacion stock bajo:', notifError.message);
+            }
         }
 
         res.json({ mensaje: 'Repuesto actualizado con éxito' });

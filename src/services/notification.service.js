@@ -73,63 +73,75 @@ export const notificarCambioEstado = async (conmysql, orden, cliente, nuevoEstad
     return null;
 };
 
-    // 3. Asignación de Técnico
+    // 3. Asignación de Técnico (al técnico Y al admin)
     export const notificarAsignacionTecnico = async (conmysql, orden, cliente, tecnicoId) => {
-    const title = '👤 Nueva asignación';
-    const body = `Orden ${orden.codigo_orden} - Cliente: ${cliente}`;
-    const data = { tipo: 'orden', id_orden: String(orden.id_orden) };
-    
-    const token = await getTokenByUsuario(conmysql, tecnicoId);
-    if (token) {
-        return await enviarNotificacion(token, title, body, data);
-    }
-    return null;
+        const title = '👤 Nueva asignacion';
+        const body = `Orden ${orden.codigo_orden} - Cliente: ${cliente}`;
+        const data = { tipo: 'orden', id_orden: String(orden.id_orden) };
+        
+        // 1. Al técnico asignado
+        const token = await getTokenByUsuario(conmysql, tecnicoId);
+        if (token) {
+            await enviarNotificacion(token, title, body, data);
+            console.log(`[FCM] Asignacion enviada al tecnico ${tecnicoId}`);
+        }
+        
+        // 2. A todos los admins
+        const [admins] = await conmysql.query(
+            'SELECT fcm_token FROM usuarios WHERE rol = "ADMIN" AND fcm_token IS NOT NULL AND fcm_token != ""'
+        );
+        const titleAdmin = `Nueva asignacion por ${tecnicoId}`;
+        const bodyAdmin = `Orden ${orden.codigo_orden} - Cliente: ${cliente} - Asignado a tecnico ${tecnicoId}`;
+        for (const admin of admins) {
+            await enviarNotificacion(admin.fcm_token, titleAdmin, bodyAdmin, data);
+            console.log(`[FCM] Asignacion enviada al admin`);
+        }
     };
 
-    // 4. Solicitud de Repuesto (stock bajo)
-    export const notificarStockBajo = async (conmysql, repuesto, stock, tecnicoNombre) => {
-    const title = '📦 Solicitud de repuesto';
-    const body = `Repuesto "${repuesto}" - Stock actual: ${stock} - Técnico: ${tecnicoNombre}`;
-    const data = { tipo: 'stock_bajo', id_repuesto: String(repuesto.id_repuesto || 0) };
-    
-    const [admins] = await conmysql.query(
-        'SELECT fcm_token FROM usuarios WHERE rol = "ADMIN" AND fcm_token IS NOT NULL AND fcm_token != ""'
-    );
-    
-    for (const admin of admins) {
-        await enviarNotificacion(admin.fcm_token, title, body, data);
-    }
-    return null;
+    // 4. Solicitud de Repuesto (stock bajo) - SOLO ADMIN
+    export const notificarStockBajo = async (conmysql, repuesto, stock, tecnicoNombre, tecnicoId) => {
+        const title = '📦 Solicitud de repuesto';
+        const body = `Tecnico ${tecnicoNombre} solicita repuesto "${repuesto.nombre}" - Stock actual: ${stock}`;
+        const data = { tipo: 'stock_bajo', id_repuesto: String(repuesto.id_repuesto || 0) };
+        
+        const [admins] = await conmysql.query(
+            'SELECT fcm_token FROM usuarios WHERE rol = "ADMIN" AND fcm_token IS NOT NULL AND fcm_token != ""'
+        );
+        
+        for (const admin of admins) {
+            await enviarNotificacion(admin.fcm_token, title, body, data);
+            console.log(`[FCM] Stock bajo enviado al admin`);
+        }
     };
 
-    // 5. Nuevo Abono
+    // 5. Nuevo Abono - AL ADMIN
     export const notificarNuevoAbono = async (conmysql, orden, monto, cliente) => {
-    const title = '💰 Nuevo abono registrado';
-    const body = `Orden ${orden.codigo_orden} - Abono: $${monto} - Cliente: ${cliente}`;
-    const data = { tipo: 'orden', id_orden: String(orden.id_orden) };
-    
-    const [admins] = await conmysql.query(
-        'SELECT fcm_token FROM usuarios WHERE rol = "ADMIN" AND fcm_token IS NOT NULL AND fcm_token != ""'
-    );
-    
-    for (const admin of admins) {
-        await enviarNotificacion(admin.fcm_token, title, body, data);
-    }
-    return null;
+        const title = '💰 Nuevo abono registrado';
+        const body = `Orden ${orden.codigo_orden} - Abono: $${monto} - Cliente: ${cliente}`;
+        const data = { tipo: 'orden', id_orden: String(orden.id_orden) };
+        
+        const [admins] = await conmysql.query(
+            'SELECT fcm_token FROM usuarios WHERE rol = "ADMIN" AND fcm_token IS NOT NULL AND fcm_token != ""'
+        );
+        
+        for (const admin of admins) {
+            await enviarNotificacion(admin.fcm_token, title, body, data);
+            console.log(`[FCM] Abono enviado al admin`);
+        }
     };
 
-    // 6. Factura Generada
+    // 6. Factura Generada - AL ADMIN
     export const notificarFacturaGenerada = async (conmysql, orden, total, cliente, numeroFactura) => {
-    const title = '📄 Factura generada';
-    const body = `Orden ${orden.codigo_orden} - Total: $${total} - Cliente: ${cliente}`;
-    const data = { tipo: 'factura', id_orden: String(orden.id_orden) };
-    
-    const [admins] = await conmysql.query(
-        'SELECT fcm_token FROM usuarios WHERE rol = "ADMIN" AND fcm_token IS NOT NULL AND fcm_token != ""'
-    );
-    
-    for (const admin of admins) {
-        await enviarNotificacion(admin.fcm_token, title, body, data);
-    }
-    return null;
-};
+        const title = '📄 Factura generada';
+        const body = `Orden ${orden.codigo_orden} - Total: $${total} - Cliente: ${cliente} - Factura: ${numeroFactura}`;
+        const data = { tipo: 'factura', id_orden: String(orden.id_orden) };
+        
+        const [admins] = await conmysql.query(
+            'SELECT fcm_token FROM usuarios WHERE rol = "ADMIN" AND fcm_token IS NOT NULL AND fcm_token != ""'
+        );
+        
+        for (const admin of admins) {
+            await enviarNotificacion(admin.fcm_token, title, body, data);
+            console.log(`[FCM] Factura enviada al admin`);
+        }
+    };

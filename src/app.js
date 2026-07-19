@@ -9,6 +9,8 @@ import ordenesRoutes from './routes/ordenes.routes.js';
 import facturasRoutes from './routes/facturas.routes.js';
 import usuariosRoutes from './routes/usuarios.routes.js';
 import categoriasEquiposRoutes from './routes/categoriasEquipos.routes.js';
+import solicitudesRoutes from './routes/solicitudes.routes.js';
+
 
 const app = express();
 
@@ -31,6 +33,7 @@ app.use('/api', ordenesRoutes);
 app.use('/api', facturasRoutes);
 app.use('/api', usuariosRoutes);
 app.use('/api', categoriasEquiposRoutes);
+app.use('/api', solicitudesRoutes);
 
 app.use((req, res, next) => {
     res.status(404).json({

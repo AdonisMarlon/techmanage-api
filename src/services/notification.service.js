@@ -29,119 +29,270 @@ export const enviarNotificacion = async (fcmToken, title, body, data = {}) => {
     }
 };
 
-    // ===== OBTENER TOKEN DE UN USUARIO ESPECÍFICO =====
-    export const getTokenByUsuario = async (conmysql, idUsuario) => {
+// ===== OBTENER TOKEN DE UN USUARIO ESPECÍFICO =====
+export const getTokenByUsuario = async (conmysql, idUsuario) => {
     try {
         const [result] = await conmysql.query(
-        'SELECT fcm_token FROM usuarios WHERE id_usuario = ? AND fcm_token IS NOT NULL AND fcm_token != ""',
-        [idUsuario]
+            'SELECT fcm_token FROM usuarios WHERE id_usuario = ? AND fcm_token IS NOT NULL AND fcm_token != ""',
+            [idUsuario]
         );
         return result.length > 0 ? result[0].fcm_token : null;
     } catch (error) {
-        console.error('Error al obtener token:', error);
+        console.error('[ERROR] getTokenByUsuario:', error.message);
         return null;
     }
-    };
+};
 
-    // ===== NOTIFICACIONES PRE-DEFINIDAS =====
+// ===== OBTENER TOKENS DE TODOS LOS ADMINS =====
+export const getTokensAdmins = async (conmysql) => {
+    try {
+        const [result] = await conmysql.query(
+            'SELECT fcm_token FROM usuarios WHERE rol = "ADMIN" AND fcm_token IS NOT NULL AND fcm_token != ""'
+        );
+        return result.map(row => row.fcm_token);
+    } catch (error) {
+        console.error('[ERROR] getTokensAdmins:', error.message);
+        return [];
+    }
+};
 
-    // 1. Nueva Orden
-export const notificarNuevaOrden = async (conmysql, orden, cliente, tecnicoId) => {
-    const title = 'Nueva orden de trabajo';
-    const body = `Orden ${orden.codigo_orden} - Cliente: ${cliente}`;
-    const data = { tipo: 'orden', id_orden: String(orden.id_orden) };
-    
-    const token = await getTokenByUsuario(conmysql, tecnicoId);
-    if (token) {
-        await enviarNotificacion(token, title, body, data);
-        console.log(`[FCM] Notificacion enviada al tecnico ${tecnicoId}`);
+// ===== ENVIAR NOTIFICACIÓN A TODOS LOS ADMINS =====
+export const notificarAdmins = async (conmysql, title, body, data = {}) => {
+    const tokens = await getTokensAdmins(conmysql);
+    if (tokens.length === 0) {
+        console.log('[FCM] No hay admins con token');
         return;
     }
-    console.log(`[FCM] Sin token para tecnico ${tecnicoId}`);
+    for (const token of tokens) {
+        await enviarNotificacion(token, title, body, data);
+    }
+    console.log(`[FCM] Notificacion enviada a ${tokens.length} admin(s)`);
 };
 
-    // 2. Cambio de Estado
-export const notificarCambioEstado = async (conmysql, orden, cliente, nuevoEstado, tecnicoId) => {
-    const title = '📋 Orden actualizada';
-    const body = `Orden ${orden.codigo_orden} cambió a "${nuevoEstado}"`;
+// ============================================================
+// 1. NUEVA ORDEN
+// ============================================================
+export const notificarNuevaOrden = async (conmysql, orden, cliente, tecnicoId, tecnicoNombre) => {
     const data = { tipo: 'orden', id_orden: String(orden.id_orden) };
     
-    const token = await getTokenByUsuario(conmysql, tecnicoId);
-    if (token) {
-        return await enviarNotificacion(token, title, body, data);
+    const tokenTecnico = await getTokenByUsuario(conmysql, tecnicoId);
+    if (tokenTecnico) {
+        const titleTecnico = '📋 Nueva orden asignada';
+        const bodyTecnico = `Orden ${orden.codigo_orden} - Cliente: ${cliente}`;
+        await enviarNotificacion(tokenTecnico, titleTecnico, bodyTecnico, data);
+        console.log(`[FCM] Nueva orden enviada al tecnico ${tecnicoId}`);
     }
-    return null;
+    
+    const titleAdmin = `📋 Nueva orden creada por ${tecnicoNombre}`;
+    const bodyAdmin = `Orden ${orden.codigo_orden} - Cliente: ${cliente} - Equipo: ${orden.tipo_equipo}`;
+    await notificarAdmins(conmysql, titleAdmin, bodyAdmin, data);
 };
 
-    // 3. Asignación de Técnico (al técnico Y al admin)
-    export const notificarAsignacionTecnico = async (conmysql, orden, cliente, tecnicoId) => {
-        const title = '👤 Nueva asignacion';
-        const body = `Orden ${orden.codigo_orden} - Cliente: ${cliente}`;
-        const data = { tipo: 'orden', id_orden: String(orden.id_orden) };
-        
-        // 1. Al técnico asignado
-        const token = await getTokenByUsuario(conmysql, tecnicoId);
-        if (token) {
-            await enviarNotificacion(token, title, body, data);
-            console.log(`[FCM] Asignacion enviada al tecnico ${tecnicoId}`);
-        }
-        
-        // 2. A todos los admins
-        const [admins] = await conmysql.query(
-            'SELECT fcm_token FROM usuarios WHERE rol = "ADMIN" AND fcm_token IS NOT NULL AND fcm_token != ""'
-        );
-        const titleAdmin = `Nueva asignacion por ${tecnicoId}`;
-        const bodyAdmin = `Orden ${orden.codigo_orden} - Cliente: ${cliente} - Asignado a tecnico ${tecnicoId}`;
-        for (const admin of admins) {
-            await enviarNotificacion(admin.fcm_token, titleAdmin, bodyAdmin, data);
-            console.log(`[FCM] Asignacion enviada al admin`);
-        }
-    };
+// ============================================================
+// 2. CAMBIO DE ESTADO
+// ============================================================
+export const notificarCambioEstado = async (conmysql, orden, cliente, nuevoEstado, tecnicoId, tecnicoNombre) => {
+    const data = { tipo: 'orden', id_orden: String(orden.id_orden) };
+    
+    const tokenTecnico = await getTokenByUsuario(conmysql, tecnicoId);
+    if (tokenTecnico) {
+        const titleTecnico = '📌 Orden actualizada';
+        const bodyTecnico = `Orden ${orden.codigo_orden} cambió a "${nuevoEstado}"`;
+        await enviarNotificacion(tokenTecnico, titleTecnico, bodyTecnico, data);
+        console.log(`[FCM] Cambio estado enviado al tecnico ${tecnicoId}`);
+    }
+    
+    const titleAdmin = `📌 Orden ${orden.codigo_orden} cambió a "${nuevoEstado}"`;
+    const bodyAdmin = `Cliente: ${cliente} - Técnico: ${tecnicoNombre}`;
+    await notificarAdmins(conmysql, titleAdmin, bodyAdmin, data);
+};
 
-    // 4. Solicitud de Repuesto (stock bajo) - SOLO ADMIN
-    export const notificarStockBajo = async (conmysql, repuesto, stock, tecnicoNombre, tecnicoId) => {
-        const title = '📦 Solicitud de repuesto';
-        const body = `Tecnico ${tecnicoNombre} solicita repuesto "${repuesto.nombre}" - Stock actual: ${stock}`;
-        const data = { tipo: 'stock_bajo', id_repuesto: String(repuesto.id_repuesto || 0) };
-        
-        const [admins] = await conmysql.query(
-            'SELECT fcm_token FROM usuarios WHERE rol = "ADMIN" AND fcm_token IS NOT NULL AND fcm_token != ""'
-        );
-        
-        for (const admin of admins) {
-            await enviarNotificacion(admin.fcm_token, title, body, data);
-            console.log(`[FCM] Stock bajo enviado al admin`);
-        }
-    };
+// ============================================================
+// 3. ASIGNACIÓN DE TÉCNICO
+// ============================================================
+export const notificarAsignacionTecnico = async (conmysql, orden, cliente, nuevoTecnicoId, nuevoTecnicoNombre, tecnicoAnteriorNombre) => {
+    const data = { tipo: 'orden', id_orden: String(orden.id_orden) };
+    
+    const tokenTecnico = await getTokenByUsuario(conmysql, nuevoTecnicoId);
+    if (tokenTecnico) {
+        const titleTecnico = '👤 Nueva asignación';
+        const bodyTecnico = `Orden ${orden.codigo_orden} - Cliente: ${cliente}`;
+        await enviarNotificacion(tokenTecnico, titleTecnico, bodyTecnico, data);
+        console.log(`[FCM] Asignacion enviada al tecnico ${nuevoTecnicoId}`);
+    }
+    
+    const titleAdmin = `👤 Técnico reasignado en orden ${orden.codigo_orden}`;
+    const bodyAdmin = `Cliente: ${cliente} - De: ${tecnicoAnteriorNombre} - A: ${nuevoTecnicoNombre}`;
+    await notificarAdmins(conmysql, titleAdmin, bodyAdmin, data);
+};
 
-    // 5. Nuevo Abono - AL ADMIN
-    export const notificarNuevoAbono = async (conmysql, orden, monto, cliente) => {
-        const title = '💰 Nuevo abono registrado';
-        const body = `Orden ${orden.codigo_orden} - Abono: $${monto} - Cliente: ${cliente}`;
-        const data = { tipo: 'orden', id_orden: String(orden.id_orden) };
-        
-        const [admins] = await conmysql.query(
-            'SELECT fcm_token FROM usuarios WHERE rol = "ADMIN" AND fcm_token IS NOT NULL AND fcm_token != ""'
-        );
-        
-        for (const admin of admins) {
-            await enviarNotificacion(admin.fcm_token, title, body, data);
-            console.log(`[FCM] Abono enviado al admin`);
-        }
-    };
+// ============================================================
+// 4. REPUESTO AGREGADO A ORDEN
+// ============================================================
+export const notificarRepuestoAgregado = async (conmysql, orden, repuestoNombre, cantidad, tecnicoNombre) => {
+    const title = `🔧 Repuesto agregado a orden ${orden.codigo_orden}`;
+    const body = `Técnico ${tecnicoNombre} agregó "${repuestoNombre}" x${cantidad}`;
+    const data = { tipo: 'orden', id_orden: String(orden.id_orden) };
+    await notificarAdmins(conmysql, title, body, data);
+};
 
-    // 6. Factura Generada - AL ADMIN
-    export const notificarFacturaGenerada = async (conmysql, orden, total, cliente, numeroFactura) => {
-        const title = '📄 Factura generada';
-        const body = `Orden ${orden.codigo_orden} - Total: $${total} - Cliente: ${cliente} - Factura: ${numeroFactura}`;
-        const data = { tipo: 'factura', id_orden: String(orden.id_orden) };
-        
-        const [admins] = await conmysql.query(
-            'SELECT fcm_token FROM usuarios WHERE rol = "ADMIN" AND fcm_token IS NOT NULL AND fcm_token != ""'
-        );
-        
-        for (const admin of admins) {
-            await enviarNotificacion(admin.fcm_token, title, body, data);
-            console.log(`[FCM] Factura enviada al admin`);
-        }
-    };
+// ============================================================
+// 5. SERVICIO AGREGADO A ORDEN
+// ============================================================
+export const notificarServicioAgregado = async (conmysql, orden, servicioNombre, tecnicoNombre) => {
+    const title = `🛠️ Servicio agregado a orden ${orden.codigo_orden}`;
+    const body = `Técnico ${tecnicoNombre} agregó servicio "${servicioNombre}"`;
+    const data = { tipo: 'orden', id_orden: String(orden.id_orden) };
+    await notificarAdmins(conmysql, title, body, data);
+};
+
+// ============================================================
+// 6. NUEVO ABONO
+// ============================================================
+export const notificarNuevoAbono = async (conmysql, orden, monto, cliente, tecnicoNombre) => {
+    const title = `💰 Nuevo abono en orden ${orden.codigo_orden}`;
+    const body = `Técnico ${tecnicoNombre} registró abono de $${monto} - Cliente: ${cliente}`;
+    const data = { tipo: 'orden', id_orden: String(orden.id_orden) };
+    await notificarAdmins(conmysql, title, body, data);
+};
+
+// ============================================================
+// 7. FACTURA GENERADA
+// ============================================================
+export const notificarFacturaGenerada = async (conmysql, orden, total, cliente, numeroFactura, tecnicoNombre) => {
+    const title = `🧾 Factura generada para orden ${orden.codigo_orden}`;
+    const body = `Técnico ${tecnicoNombre} - Factura: ${numeroFactura} - Total: $${total} - Cliente: ${cliente}`;
+    const data = { tipo: 'factura', id_orden: String(orden.id_orden) };
+    await notificarAdmins(conmysql, title, body, data);
+};
+
+// ============================================================
+// 8. STOCK BAJO (SOLICITUD DE REPUESTO)
+// ============================================================
+export const notificarStockBajo = async (conmysql, repuesto, stock, tecnicoNombre) => {
+    const title = `⚠️ Solicitud de repuesto: "${repuesto.nombre}"`;
+    const body = `Técnico ${tecnicoNombre} solicita stock - Actual: ${stock} unidades`;
+    const data = { tipo: 'stock_bajo', id_repuesto: String(repuesto.id_repuesto || 0) };
+    await notificarAdmins(conmysql, title, body, data);
+};
+
+// ============================================================
+// 9. NUEVO CLIENTE REGISTRADO
+// ============================================================
+export const notificarNuevoCliente = async (conmysql, cliente, usuarioNombre) => {
+    const title = `👤 Nuevo cliente registrado`;
+    const body = `${usuarioNombre} registró a "${cliente.nombre_completo}" - Cédula: ${cliente.cedula}`;
+    const data = { tipo: 'cliente' };
+    await notificarAdmins(conmysql, title, body, data);
+};
+
+// ============================================================
+// 10. CLIENTE EDITADO
+// ============================================================
+export const notificarClienteEditado = async (conmysql, cliente, usuarioNombre) => {
+    const title = `✏️ Cliente editado`;
+    const body = `${usuarioNombre} editó a "${cliente.nombre_completo}" - Cédula: ${cliente.cedula}`;
+    const data = { tipo: 'cliente' };
+    await notificarAdmins(conmysql, title, body, data);
+};
+
+// ============================================================
+// 11. NUEVO EQUIPO REGISTRADO
+// ============================================================
+export const notificarNuevoEquipo = async (conmysql, equipo, clienteNombre, usuarioNombre) => {
+    const title = `💻 Nuevo equipo registrado`;
+    const body = `${usuarioNombre} agregó equipo "${equipo.tipo_equipo}" - ${equipo.marca} ${equipo.modelo} - Cliente: ${clienteNombre}`;
+    const data = { tipo: 'equipo' };
+    await notificarAdmins(conmysql, title, body, data);
+};
+
+// ============================================================
+// 12. EQUIPO EDITADO
+// ============================================================
+export const notificarEquipoEditado = async (conmysql, equipo, clienteNombre, usuarioNombre) => {
+    const title = `✏️ Equipo editado`;
+    const body = `${usuarioNombre} editó equipo "${equipo.tipo_equipo}" - ${equipo.marca} ${equipo.modelo} - Cliente: ${clienteNombre}`;
+    const data = { tipo: 'equipo' };
+    await notificarAdmins(conmysql, title, body, data);
+};
+
+// ============================================================
+// 13. NUEVO REPUESTO EN INVENTARIO
+// ============================================================
+export const notificarNuevoRepuesto = async (conmysql, repuesto, usuarioNombre) => {
+    const title = `📦 Nuevo repuesto en inventario`;
+    const body = `${usuarioNombre} agregó "${repuesto.nombre}" - Stock: ${repuesto.cantidad_stock} - Precio: $${repuesto.precio_unitario}`;
+    const data = { tipo: 'inventario' };
+    await notificarAdmins(conmysql, title, body, data);
+};
+
+// ============================================================
+// 14. REPUESTO EDITADO EN INVENTARIO
+// ============================================================
+export const notificarRepuestoEditado = async (conmysql, repuesto, usuarioNombre) => {
+    const title = `✏️ Repuesto editado en inventario`;
+    const body = `${usuarioNombre} editó "${repuesto.nombre}" - Stock: ${repuesto.cantidad_stock} - Precio: $${repuesto.precio_unitario}`;
+    const data = { tipo: 'inventario' };
+    await notificarAdmins(conmysql, title, body, data);
+};
+
+// ============================================================
+// 15. NUEVO SERVICIO (SOLICITUD)
+// ============================================================
+export const notificarSolicitudServicio = async (conmysql, servicioNombre, tecnicoNombre) => {
+    const title = `🛠️ Solicitud de nuevo servicio`;
+    const body = `Técnico ${tecnicoNombre} solicita crear servicio: "${servicioNombre}"`;
+    const data = { tipo: 'servicio' };
+    await notificarAdmins(conmysql, title, body, data);
+};
+
+// ============================================================
+// 16. NUEVO TIPO DE EQUIPO (SOLICITUD)
+// ============================================================
+export const notificarSolicitudTipoEquipo = async (conmysql, tipoNombre, tecnicoNombre) => {
+    const title = `📋 Solicitud de nuevo tipo de equipo`;
+    const body = `Técnico ${tecnicoNombre} solicita crear tipo: "${tipoNombre}"`;
+    const data = { tipo: 'categoria_equipo' };
+    await notificarAdmins(conmysql, title, body, data);
+};
+
+// ============================================================
+// 17. NUEVO USUARIO REGISTRADO
+// ============================================================
+export const notificarNuevoUsuario = async (conmysql, usuario, adminNombre) => {
+    const title = `👤 Nuevo usuario registrado`;
+    const body = `${adminNombre} registró a "${usuario.nombre}" como ${usuario.rol}`;
+    const data = { tipo: 'usuario' };
+    await notificarAdmins(conmysql, title, body, data);
+};
+
+
+// ============================================================
+// SOLICITUD DE REPUESTO (Técnico → Admin)
+// ============================================================
+export const notificarSolicitudRepuesto = async (conmysql, solicitud, tecnicoNombre) => {
+    const title = `📦 Solicitud de repuesto: "${solicitud.nombre}"`;
+    const body = `Técnico ${tecnicoNombre} solicita repuesto - Categoría: ${solicitud.categoria_sugerida || 'Sin categoría'}`;
+    const data = { tipo: 'solicitud_repuesto', id_solicitud: String(solicitud.id_solicitud) };
+    await notificarAdmins(conmysql, title, body, data);
+};
+
+// ============================================================
+// SOLICITUD DE SERVICIO (Técnico → Admin)
+// ============================================================
+export const notificarSolicitudServicio = async (conmysql, solicitud, tecnicoNombre) => {
+    const title = `🛠️ Solicitud de servicio: "${solicitud.nombre}"`;
+    const body = `Técnico ${tecnicoNombre} solicita nuevo servicio`;
+    const data = { tipo: 'solicitud_servicio', id_solicitud: String(solicitud.id_solicitud) };
+    await notificarAdmins(conmysql, title, body, data);
+};
+
+// ============================================================
+// SOLICITUD DE TIPO DE EQUIPO (Técnico → Admin)
+// ============================================================
+export const notificarSolicitudTipoEquipo = async (conmysql, solicitud, tecnicoNombre) => {
+    const title = `📋 Solicitud de tipo de equipo: "${solicitud.nombre}"`;
+    const body = `Técnico ${tecnicoNombre} solicita nuevo tipo de equipo`;
+    const data = { tipo: 'solicitud_tipo_equipo', id_solicitud: String(solicitud.id_solicitud) };
+    await notificarAdmins(conmysql, title, body, data);
+};

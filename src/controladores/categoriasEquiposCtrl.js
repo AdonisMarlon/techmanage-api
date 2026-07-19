@@ -1,4 +1,5 @@
 import { conmysql } from '../db.js';
+import { notificarSolicitudTipoEquipo } from '../services/notification.service.js';
 
 // ==================== OBTENER TODAS LAS CATEGORÍAS ====================
 export const getCategoriasEquipos = async (req, res) => {
@@ -8,7 +9,7 @@ export const getCategoriasEquipos = async (req, res) => {
         );
         res.json(result);
     } catch (error) {
-        console.error('Error al obtener categorías de equipos:', error);
+        console.error('[ERROR] getCategoriasEquipos:', error.message);
         res.status(500).json({ error: 'Error al obtener las categorías' });
     }
 };
@@ -26,7 +27,7 @@ export const getCategoriaEquipoById = async (req, res) => {
         }
         res.json(result[0]);
     } catch (error) {
-        console.error('Error al obtener categoría:', error);
+        console.error('[ERROR] getCategoriaEquipoById:', error.message);
         res.status(500).json({ error: 'Error al obtener la categoría' });
     }
 };
@@ -45,12 +46,22 @@ export const crearCategoriaEquipo = async (req, res) => {
             [nombre.trim(), descripcion || '', icono || 'hardware-chip-outline']
         );
 
+        //NOTIFICACIÓN: Si el usuario es TECNICO, notificar al admin que solicitó un nuevo tipo
+        if (req.user.rol === 'TECNICO') {
+            try {
+                await notificarSolicitudTipoEquipo(conmysql, nombre, req.user.nombre || 'Tecnico');
+                console.log('[FCM] Solicitud de tipo de equipo enviada al admin');
+            } catch (notifError) {
+                console.error('[ERROR] notificarSolicitudTipoEquipo:', notifError.message);
+            }
+        }
+
         res.status(201).json({
             mensaje: 'Categoría creada con éxito',
             id_categoria_equipo: result.insertId
         });
     } catch (error) {
-        console.error('Error al crear categoría:', error);
+        console.error('[ERROR] crearCategoriaEquipo:', error.message);
         if (error.code === 'ER_DUP_ENTRY') {
             return res.status(400).json({ error: 'Ya existe una categoría con ese nombre' });
         }
@@ -75,7 +86,7 @@ export const actualizarCategoriaEquipo = async (req, res) => {
 
         res.json({ mensaje: 'Categoría actualizada con éxito' });
     } catch (error) {
-        console.error('Error al actualizar categoría:', error);
+        console.error('[ERROR] actualizarCategoriaEquipo:', error.message);
         if (error.code === 'ER_DUP_ENTRY') {
             return res.status(400).json({ error: 'Ya existe una categoría con ese nombre' });
         }
@@ -88,7 +99,6 @@ export const eliminarCategoriaEquipo = async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Verificar si tiene equipos asociados
         const [equipos] = await conmysql.query(
             'SELECT COUNT(*) as total FROM equipos WHERE id_categoria_equipo = ?',
             [id]
@@ -111,7 +121,7 @@ export const eliminarCategoriaEquipo = async (req, res) => {
 
         res.json({ mensaje: 'Categoría eliminada con éxito' });
     } catch (error) {
-        console.error('Error al eliminar categoría:', error);
+        console.error('[ERROR] eliminarCategoriaEquipo:', error.message);
         res.status(500).json({ error: 'Error al eliminar la categoría' });
     }
 };

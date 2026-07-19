@@ -237,16 +237,6 @@ export const notificarRepuestoEditado = async (conmysql, repuesto, usuarioNombre
 };
 
 // ============================================================
-// 15. NUEVO SERVICIO (SOLICITUD)
-// ============================================================
-export const notificarSolicitudServicio = async (conmysql, servicioNombre, tecnicoNombre) => {
-    const title = `🛠️ Solicitud de nuevo servicio`;
-    const body = `Técnico ${tecnicoNombre} solicita crear servicio: "${servicioNombre}"`;
-    const data = { tipo: 'servicio' };
-    await notificarAdmins(conmysql, title, body, data);
-};
-
-// ============================================================
 // 16. NUEVO TIPO DE EQUIPO (SOLICITUD)
 // ============================================================
 export const notificarSolicitudTipoEquipo = async (conmysql, tipoNombre, tecnicoNombre) => {

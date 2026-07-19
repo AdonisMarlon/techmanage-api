@@ -2,22 +2,20 @@ import admin from 'firebase-admin';
 
 function initFirebase() {
     try {
-        // Intentar desde variable de entorno (Render)
         if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-        if (!admin.apps || admin.apps.length === 0) {
-            admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount)
-            });
+            const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+            if (!admin.apps || admin.apps.length === 0) {
+                admin.initializeApp({
+                    credential: admin.credential.cert(serviceAccount)
+                });
+            }
+            console.log('[FCM] Firebase inicializado');
+            return admin;
         }
-        console.log('Firebase inicializado desde variable de entorno');
-        return admin;
-        }
-        
-        console.warn('No hay credenciales de Firebase. Las notificaciones NO funcionarán.');
+        console.warn('[FCM] Sin credenciales de Firebase');
         return null;
     } catch (error) {
-        console.error('Error al inicializar Firebase:', error.message);
+        console.error('[FCM] Error al inicializar:', error.message);
         return null;
     }
 }

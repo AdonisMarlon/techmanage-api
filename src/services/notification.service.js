@@ -2,44 +2,32 @@ import admin from '../firebase.js';
 
 // ===== ENVIAR NOTIFICACIÓN A UN DISPOSITIVO =====
 export const enviarNotificacion = async (fcmToken, title, body, data = {}) => {
-    console.log('🔵 1. Enviando notificación...');
-    console.log('🔵 2. Token:', fcmToken);
-    console.log('🔵 3. Título:', title);
-    
     if (!admin) {
-        console.log('⚠️ Firebase no inicializado. Notificación no enviada.');
+        console.log('[FCM] Firebase no disponible');
         return null;
     }
 
     if (!fcmToken) {
-        console.log('⚠️ Token FCM no proporcionado.');
+        console.log('[FCM] Token no disponible');
         return null;
     }
 
     const message = {
-        notification: {
-        title: title,
-        body: body,
-        },
+        notification: { title, body },
         data: data,
         token: fcmToken,
-        android: {
-        priority: 'high',
-        notification: {
-            sound: 'default',
-        }
-        }
+        android: { priority: 'high', notification: { sound: 'default' } }
     };
 
     try {
         const response = await admin.messaging().send(message);
-        console.log('Notificación enviada exitosamente');
+        console.log('[FCM] Notificacion enviada correctamente');
         return response;
     } catch (error) {
-        console.error('Error al enviar notificación:', error);
+        console.error('[FCM] Error al enviar:', error.message);
         throw error;
     }
-    };
+};
 
     // ===== OBTENER TOKEN DE UN USUARIO ESPECÍFICO =====
     export const getTokenByUsuario = async (conmysql, idUsuario) => {
@@ -58,21 +46,22 @@ export const enviarNotificacion = async (fcmToken, title, body, data = {}) => {
     // ===== NOTIFICACIONES PRE-DEFINIDAS =====
 
     // 1. Nueva Orden
-    export const notificarNuevaOrden = async (conmysql, orden, cliente, tecnicoId) => {
-    const title = '🆕 Nueva orden de trabajo';
-    const body = `Orden ${orden.codigo_orden} - Cliente: ${cliente} - Equipo: ${orden.tipo_equipo}`;
+export const notificarNuevaOrden = async (conmysql, orden, cliente, tecnicoId) => {
+    const title = 'Nueva orden de trabajo';
+    const body = `Orden ${orden.codigo_orden} - Cliente: ${cliente}`;
     const data = { tipo: 'orden', id_orden: String(orden.id_orden) };
     
     const token = await getTokenByUsuario(conmysql, tecnicoId);
     if (token) {
-        return await enviarNotificacion(token, title, body, data);
+        await enviarNotificacion(token, title, body, data);
+        console.log(`[FCM] Notificacion enviada al tecnico ${tecnicoId}`);
+        return;
     }
-    console.log(`⚠️ No hay token para el técnico ${tecnicoId}`);
-    return null;
-    };
+    console.log(`[FCM] Sin token para tecnico ${tecnicoId}`);
+};
 
     // 2. Cambio de Estado
-    export const notificarCambioEstado = async (conmysql, orden, cliente, nuevoEstado, tecnicoId) => {
+export const notificarCambioEstado = async (conmysql, orden, cliente, nuevoEstado, tecnicoId) => {
     const title = '📋 Orden actualizada';
     const body = `Orden ${orden.codigo_orden} cambió a "${nuevoEstado}"`;
     const data = { tipo: 'orden', id_orden: String(orden.id_orden) };
@@ -82,7 +71,7 @@ export const enviarNotificacion = async (fcmToken, title, body, data = {}) => {
         return await enviarNotificacion(token, title, body, data);
     }
     return null;
-    };
+};
 
     // 3. Asignación de Técnico
     export const notificarAsignacionTecnico = async (conmysql, orden, cliente, tecnicoId) => {

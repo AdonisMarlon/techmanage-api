@@ -85,10 +85,17 @@ export const registrarUsuario = async (req, res) => {
 // GUARDAR TOKEN FCM DEL USUARIO (NUEVO)
 export const guardarTokenFCM = async (req, res) => {
     try {
+        console.log('🔵 1. Llegó a guardarTokenFCM');
+        console.log('🔵 2. Body:', req.body);
+        
         const { fcmToken } = req.body;
         const userId = req.user.id;
+        
+        console.log('🔵 3. Token recibido:', fcmToken);
+        console.log('🔵 4. Usuario ID:', userId);
 
         if (!fcmToken) {
+            console.log('🔴 5. Error: Token FCM es requerido');
             return res.status(400).json({ error: 'Token FCM es requerido' });
         }
 
@@ -97,16 +104,20 @@ export const guardarTokenFCM = async (req, res) => {
             [fcmToken, userId]
         );
 
+        console.log('🔵 6. Resultado de la consulta:', result);
+
         if (result.affectedRows === 0) {
+            console.log('🔴 7. Error: Usuario no encontrado');
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
 
+        console.log('🟢 8. Token guardado correctamente para usuario:', userId);
         res.json({
             mensaje: 'Token FCM guardado correctamente',
             id_usuario: userId
         });
     } catch (error) {
-        console.error('Error al guardar token FCM:', error);
+        console.error('🔴 9. Error al guardar token FCM:', error);
         res.status(500).json({ error: 'Error al guardar token' });
     }
 };

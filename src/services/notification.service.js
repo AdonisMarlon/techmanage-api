@@ -2,6 +2,10 @@ import admin from '../firebase.js';
 
 // ===== ENVIAR NOTIFICACIÓN A UN DISPOSITIVO =====
 export const enviarNotificacion = async (fcmToken, title, body, data = {}) => {
+    console.log('🔵 1. Enviando notificación...');
+    console.log('🔵 2. Token:', fcmToken);
+    console.log('🔵 3. Título:', title);
+    
     if (!admin) {
         console.log('⚠️ Firebase no inicializado. Notificación no enviada.');
         return null;

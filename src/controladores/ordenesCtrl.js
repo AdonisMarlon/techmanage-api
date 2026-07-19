@@ -321,7 +321,7 @@ export const actualizarOrden = async (req, res) => {
         
         const tecnicoAnterior = ordenAntes[0]?.id_tecnico;
         
-        // ✅ NOTIFICACIÓN: Si cambió el técnico
+        // NOTIFICACIÓN: Si cambió el técnico
         if (tecnicoAnterior !== id_tecnico) {
             try {
                 // Obtener nombre del técnico anterior

@@ -119,6 +119,8 @@ export const notificarAsignacionTecnico = async (conmysql, orden, cliente, nuevo
         const bodyTecnico = `Orden ${orden.codigo_orden} - Cliente: ${cliente}`;
         await enviarNotificacion(tokenTecnico, titleTecnico, bodyTecnico, data);
         console.log(`[FCM] Asignacion enviada al tecnico ${nuevoTecnicoId}`);
+    }else{
+        console.log(`[FCM] no hay token para el tecnico ${nuevoTecnicoId}`);
     }
     
     const titleAdmin = `👤 Técnico reasignado en orden ${orden.codigo_orden}`;

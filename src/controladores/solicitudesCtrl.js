@@ -12,7 +12,7 @@ export const crearSolicitudRepuesto = async (req, res) => {
     try {
         const { nombre, descripcion, categoria_sugerida } = req.body;
         const id_tecnico = req.user.id;
-        const tecnicoNombre = req.user.nombre || 'Tecnico';
+        const tecnicoNombre = req.user?.nombre || 'Tecnico';
 
         if (!nombre || nombre.trim() === '') {
             return res.status(400).json({ error: 'El nombre del repuesto es obligatorio' });
@@ -55,7 +55,7 @@ export const crearSolicitudServicio = async (req, res) => {
     try {
         const { nombre, descripcion } = req.body;
         const id_tecnico = req.user.id;
-        const tecnicoNombre = req.user.nombre || 'Tecnico';
+        const tecnicoNombre = req.user?.nombre || 'Tecnico';
 
         if (!nombre || nombre.trim() === '') {
             return res.status(400).json({ error: 'El nombre del servicio es obligatorio' });
@@ -96,7 +96,7 @@ export const crearSolicitudTipoEquipo = async (req, res) => {
     try {
         const { nombre, descripcion, icono_sugerido } = req.body;
         const id_tecnico = req.user.id;
-        const tecnicoNombre = req.user.nombre || 'Tecnico';
+        const tecnicoNombre = req.user?.nombre || 'Tecnico';
 
         if (!nombre || nombre.trim() === '') {
             return res.status(400).json({ error: 'El nombre del tipo de equipo es obligatorio' });

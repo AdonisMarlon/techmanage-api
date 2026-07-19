@@ -9,7 +9,7 @@ router.post('/login', login);
 router.post('/registrar', registrarUsuario);
 
 // Ruta protegida para guardar el token FCM (NUEVA)
-router.post('/auth/save-token', verificarToken, guardarTokenFCM);
+router.post('/save-token', verificarToken, guardarTokenFCM);
 
 // Ruta protegida
 router.get('/perfil', verificarToken, (req, res) => {

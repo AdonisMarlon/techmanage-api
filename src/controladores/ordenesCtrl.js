@@ -20,6 +20,7 @@ export const getOrdenes = async (req, res) => {
                     e.tipo_equipo, e.marca, e.modelo, e.numero_serie,
                     cat.nombre as categoria_nombre,
                     u.nombre as tecnico,
+                    u.foto_perfil as tecnico_foto,
                     COALESCE((SELECT SUM(a.monto) FROM abonos a WHERE a.id_orden = o.id_orden), 0) as total_abonos,
                     DATEDIFF(o.fecha_garantia, NOW()) as dias_garantia_restantes
             FROM ordenes_trabajo o

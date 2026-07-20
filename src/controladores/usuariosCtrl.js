@@ -3,11 +3,12 @@ import bcrypt from 'bcryptjs';
 import { notificarNuevoUsuario } from '../services/notification.service.js';
 import { subirImagenAGitHub } from '../services/github.service.js';
 
-// ===== SUBIR FOTO DE PERFIL
+// ===== SUBIR FOTO DE PERFIL =====
 export const subirFotoPerfil = async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.user.id;
+        
         if (parseInt(id) !== userId) {
             return res.status(403).json({ error: 'No puedes subir foto a otro usuario' });
         }
@@ -30,7 +31,7 @@ export const subirFotoPerfil = async (req, res) => {
         }
 
         res.json({ 
-            mensaje: 'Foto de perfil subida con éxito',
+            mensaje: 'Foto de perfil subida con exito',
             imagenUrl: imagenUrl
         });
 
@@ -40,13 +41,11 @@ export const subirFotoPerfil = async (req, res) => {
     }
 };
 
-// ============================================================
-// OBTENER TECNICOS
-// ============================================================
+// ===== OBTENER TECNICOS =====
 export const getTecnicos = async (req, res) => {
     try {
         const [result] = await conmysql.query(
-            'SELECT id_usuario, nombre, correo, rol, estado FROM usuarios WHERE rol = "TECNICO" ORDER BY nombre ASC'
+            'SELECT id_usuario, nombre, correo, rol, estado, foto_perfil FROM usuarios WHERE rol = "TECNICO" ORDER BY nombre ASC'
         );
         res.json(result);
     } catch (error) {
@@ -55,10 +54,28 @@ export const getTecnicos = async (req, res) => {
     }
 };
 
-// ============================================================
-// CREAR USUARIO (SOLO ADMIN)
-// - Notifica al admin cuando se crea un nuevo usuario
-// ============================================================
+// ===== OBTENER USUARIO POR ID (CUALQUIER ROL) =====
+export const getUsuarioById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const [result] = await conmysql.query(
+            'SELECT id_usuario, nombre, correo, rol, estado, foto_perfil FROM usuarios WHERE id_usuario = ?',
+            [id]
+        );
+        
+        if (result.length === 0) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+        
+        res.json(result[0]);
+    } catch (error) {
+        console.error('[ERROR] getUsuarioById:', error.message);
+        res.status(500).json({ error: 'Error al obtener el usuario' });
+    }
+};
+
+// ===== CREAR USUARIO (SOLO ADMIN) =====
 export const crearUsuario = async (req, res) => {
     try {
         const { nombre, correo, password, rol } = req.body;
@@ -72,7 +89,6 @@ export const crearUsuario = async (req, res) => {
             [nombre, correo, passwordEncriptada, rol || 'TECNICO']
         );
 
-        //NOTIFICACIÓN: Nuevo usuario creado
         try {
             await notificarNuevoUsuario(
                 conmysql,
@@ -85,17 +101,18 @@ export const crearUsuario = async (req, res) => {
         }
 
         res.status(201).json({ 
-            mensaje: 'Usuario creado con éxito', 
+            mensaje: 'Usuario creado con exito', 
             id_usuario: result.insertId 
         });
     } catch (error) {
         console.error('[ERROR] crearUsuario:', error.message);
         if (error.code === 'ER_DUP_ENTRY') {
-            return res.status(400).json({ error: 'El correo ya está registrado' });
+            return res.status(400).json({ error: 'El correo ya esta registrado' });
         }
         res.status(500).json({ error: 'Error al crear el usuario' });
     }
 };
+
 // ===== ACTUALIZAR USUARIO (CUALQUIER USUARIO PUEDE ACTUALIZAR SU PERFIL) =====
 export const actualizarUsuario = async (req, res) => {
     try {
@@ -109,18 +126,27 @@ export const actualizarUsuario = async (req, res) => {
             return res.status(403).json({ error: 'No puedes editar a otro usuario' });
         }
 
-        // TECNICO: solo puede cambiar nombre y correo
+        // TECNICO: solo puede cambiar nombre, correo y foto_perfil
         if (userRol === 'TECNICO') {
             const [result] = await conmysql.query(
-                'UPDATE usuarios SET nombre = ?, correo = ? WHERE id_usuario = ?',
-                [nombre, correo, id]
+                'UPDATE usuarios SET nombre = ?, correo = ?, foto_perfil = ? WHERE id_usuario = ?',
+                [nombre, correo, foto_perfil || null, id]
             );
 
             if (result.affectedRows === 0) {
                 return res.status(404).json({ error: 'Usuario no encontrado' });
             }
 
-            return res.json({ mensaje: 'Perfil actualizado con éxito' });
+            // Obtener usuario actualizado
+            const [usuarioActualizado] = await conmysql.query(
+                'SELECT id_usuario, nombre, correo, rol, estado, foto_perfil FROM usuarios WHERE id_usuario = ?',
+                [id]
+            );
+
+            return res.json({
+                mensaje: 'Perfil actualizado con exito',
+                usuario: usuarioActualizado[0]
+            });
         }
 
         // ADMIN: puede editar todo
@@ -149,22 +175,18 @@ export const actualizarUsuario = async (req, res) => {
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
 
-        res.json({ mensaje: 'Usuario actualizado con éxito' });
+        res.json({ mensaje: 'Usuario actualizado con exito' });
     } catch (error) {
         console.error('[ERROR] actualizarUsuario:', error.message);
         res.status(500).json({ error: 'Error al actualizar el usuario' });
     }
 };
 
-// ============================================================
-// ELIMINAR USUARIO (SOLO ADMIN)
-// ============================================================
+// ===== ELIMINAR USUARIO (SOLO ADMIN) =====
 export const eliminarUsuario = async (req, res) => {
     try {
         const { id } = req.params;
-        const adminNombre = req.user?.nombre || 'Admin';
         
-        // No permitir eliminar al admin principal
         const [usuario] = await conmysql.query(
             'SELECT rol, nombre FROM usuarios WHERE id_usuario = ?',
             [id]
@@ -183,26 +205,23 @@ export const eliminarUsuario = async (req, res) => {
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
 
-        // NOTIFICACIÓN: Usuario eliminado (opcional)
-        console.log(`[FCM] Usuario ${usuario[0]?.nombre || 'N/A'} eliminado por ${adminNombre}`);
+        console.log(`[FCM] Usuario ${usuario[0]?.nombre || 'N/A'} eliminado`);
 
-        res.json({ mensaje: 'Usuario eliminado con éxito' });
+        res.json({ mensaje: 'Usuario eliminado con exito' });
     } catch (error) {
         console.error('[ERROR] eliminarUsuario:', error.message);
         res.status(500).json({ error: 'Error al eliminar el usuario' });
     }
 };
 
-// ============================================================
-// CAMBIAR CONTRASEÑA (Admin)
-// ============================================================
+// ===== CAMBIAR CONTRASEÑA (Admin) =====
 export const cambiarPasswordAdmin = async (req, res) => {
     try {
         const { id } = req.params;
         const { nuevaPassword } = req.body;
 
         if (!nuevaPassword || nuevaPassword.length < 6) {
-            return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+            return res.status(400).json({ error: 'La contrasena debe tener al menos 6 caracteres' });
         }
 
         const salt = await bcrypt.genSalt(10);
@@ -217,10 +236,10 @@ export const cambiarPasswordAdmin = async (req, res) => {
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
 
-        res.json({ mensaje: 'Contraseña actualizada con éxito' });
+        res.json({ mensaje: 'Contrasena actualizada con exito' });
     } catch (error) {
         console.error('[ERROR] cambiarPasswordAdmin:', error.message);
-        res.status(500).json({ error: 'Error al cambiar la contraseña' });
+        res.status(500).json({ error: 'Error al cambiar la contrasena' });
     }
 };
 
@@ -231,11 +250,11 @@ export const cambiarPasswordPropio = async (req, res) => {
         const { passwordActual, nuevaPassword } = req.body;
 
         if (!passwordActual || !nuevaPassword) {
-            return res.status(400).json({ error: 'Debe ingresar la contraseña actual y la nueva' });
+            return res.status(400).json({ error: 'Debe ingresar la contrasena actual y la nueva' });
         }
 
         if (nuevaPassword.length < 6) {
-            return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres' });
+            return res.status(400).json({ error: 'La nueva contrasena debe tener al menos 6 caracteres' });
         }
 
         const [usuario] = await conmysql.query(
@@ -249,7 +268,7 @@ export const cambiarPasswordPropio = async (req, res) => {
 
         const passwordValida = await bcrypt.compare(passwordActual, usuario[0].password);
         if (!passwordValida) {
-            return res.status(401).json({ error: 'Contraseña actual incorrecta' });
+            return res.status(401).json({ error: 'Contrasena actual incorrecta' });
         }
 
         const salt = await bcrypt.genSalt(10);
@@ -260,31 +279,9 @@ export const cambiarPasswordPropio = async (req, res) => {
             [passwordEncriptada, userId]
         );
 
-        res.json({ mensaje: 'Contraseña actualizada con éxito' });
+        res.json({ mensaje: 'Contrasena actualizada con exito' });
     } catch (error) {
         console.error('[ERROR] cambiarPasswordPropio:', error.message);
-        res.status(500).json({ error: 'Error al cambiar la contraseña' });
-    }
-};
-
-
-// ===== OBTENER USUARIO POR ID (CUALQUIER ROL) =====
-export const getUsuarioById = async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        const [result] = await conmysql.query(
-            'SELECT id_usuario, nombre, correo, rol, estado, foto_perfil FROM usuarios WHERE id_usuario = ?',
-            [id]
-        );
-        
-        if (result.length === 0) {
-            return res.status(404).json({ error: 'Usuario no encontrado' });
-        }
-        
-        res.json(result[0]);
-    } catch (error) {
-        console.error('[ERROR] getUsuarioById:', error.message);
-        res.status(500).json({ error: 'Error al obtener el usuario' });
+        res.status(500).json({ error: 'Error al cambiar la contrasena' });
     }
 };

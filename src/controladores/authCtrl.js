@@ -8,7 +8,7 @@ export const login = async (req, res) => {
         const { correo, password } = req.body;
 
         const [result] = await conmysql.query(
-            'SELECT id_usuario, nombre, correo, password, rol, estado FROM usuarios WHERE correo = ?',
+            'SELECT id_usuario, nombre, correo, password, rol, estado, foto_perfil FROM usuarios WHERE correo = ?',
             [correo]
         );
 
@@ -45,7 +45,8 @@ export const login = async (req, res) => {
                 id: user.id_usuario,
                 nombre: user.nombre,
                 correo: user.correo,
-                rol: user.rol
+                rol: user.rol,
+                foto_perfil: user.foto_perfil || ''
             }
         });
 
@@ -82,7 +83,7 @@ export const registrarUsuario = async (req, res) => {
     }
 };
 
-// GUARDAR TOKEN FCM DEL USUARIO (NUEVO)
+// ===== GUARDAR TOKEN FCM DEL USUARIO =====
 export const guardarTokenFCM = async (req, res) => {
     try {
         const { fcmToken } = req.body;

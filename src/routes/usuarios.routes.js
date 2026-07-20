@@ -31,5 +31,4 @@ router.put('/usuarios/cambiar-password', verificarToken, cambiarPasswordPropio);
 
 router.post('/usuarios/:id/foto', verificarToken, upload.single('imagen'), subirFotoPerfil);
 
-
 export default router;

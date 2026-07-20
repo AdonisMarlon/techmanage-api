@@ -13,6 +13,8 @@ export const subirFotoPerfil = async (req, res) => {
             return res.status(400).json({ error: 'No se ha subido ninguna imagen' });
         }
 
+        console.log('📸 Foto de perfil recibida:', req.file.filename);
+
         // Subir a GitHub
         const imagenUrl = await subirImagenAGitHub(req.file.path, req.file.filename, 'uploads/usuarios');
 
@@ -36,7 +38,6 @@ export const subirFotoPerfil = async (req, res) => {
         res.status(500).json({ error: 'Error al subir la foto' });
     }
 };
-
 
 // ============================================================
 // OBTENER TECNICOS

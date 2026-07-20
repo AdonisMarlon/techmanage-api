@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getEquipos, getEquipoById, crearEquipo, actualizarEquipo, eliminarEquipo,subirImagenEquipo  } from '../controladores/equiposCtrl.js';
 import { verificarToken, verificarAdmin } from '../middlewares/auth.js';
+import upload from '../middlewares/upload.js';
 
 const router = Router();
 

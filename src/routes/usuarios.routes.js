@@ -9,6 +9,8 @@ import {
     subirFotoPerfil
 } from '../controladores/usuariosCtrl.js';
 import { verificarToken, verificarAdmin } from '../middlewares/auth.js';
+import upload from '../middlewares/upload.js';
+
 
 const router = Router();
 

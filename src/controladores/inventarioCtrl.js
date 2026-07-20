@@ -4,10 +4,7 @@ import {
     notificarRepuestoEditado, 
     notificarStockBajo 
 } from '../services/notification.service.js';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
+import { subirImagenAGitHub } from '../services/github.service.js';
 
 
 // ===== SUBIR IMAGEN DE REPUESTO =====
@@ -19,9 +16,10 @@ export const subirImagenRepuesto = async (req, res) => {
             return res.status(400).json({ error: 'No se ha subido ninguna imagen' });
         }
 
-        const baseUrl = process.env.BASE_URL || 'https://techmanage-api.onrender.com';
-        const imagenUrl = `${baseUrl}/uploads/${req.file.filename}`;
+        // Subir a GitHub
+        const imagenUrl = await subirImagenAGitHub(req.file.path, req.file.filename, 'uploads/inventario');
 
+        // Guardar URL en la base de datos
         const [result] = await conmysql.query(
             'UPDATE inventario SET imagen = ? WHERE id_repuesto = ?',
             [imagenUrl, id]
@@ -41,8 +39,6 @@ export const subirImagenRepuesto = async (req, res) => {
         res.status(500).json({ error: 'Error al subir la imagen' });
     }
 };
-
-
 
 // ============================================================
 // OBTENER TODO EL INVENTARIO

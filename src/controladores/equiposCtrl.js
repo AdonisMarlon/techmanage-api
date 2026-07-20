@@ -1,25 +1,22 @@
 import { conmysql } from '../db.js';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { subirImagenAGitHub } from '../services/github.service.js';
 
 import { notificarNuevoEquipo, notificarEquipoEditado } from '../services/notification.service.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // ===== SUBIR IMAGEN DE EQUIPO =====
 export const subirImagenEquipo = async (req, res) => {
     try {
         const { id } = req.params;
         
+        // Verificar que se haya subido un archivo
         if (!req.file) {
             return res.status(400).json({ error: 'No se ha subido ninguna imagen' });
         }
 
-        const baseUrl = process.env.BASE_URL || 'https://techmanage-api.onrender.com';
-        const imagenUrl = `${baseUrl}/uploads/${req.file.filename}`;
+        // Subir a GitHub
+        const imagenUrl = await subirImagenAGitHub(req.file.path, req.file.filename, 'uploads/equipos');
 
+        // Guardar URL en la base de datos
         const [result] = await conmysql.query(
             'UPDATE equipos SET imagen = ? WHERE id_equipo = ?',
             [imagenUrl, id]

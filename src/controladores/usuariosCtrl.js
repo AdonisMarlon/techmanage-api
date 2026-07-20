@@ -1,9 +1,7 @@
 import { conmysql } from '../db.js';
 import bcrypt from 'bcryptjs';
 import { notificarNuevoUsuario } from '../services/notification.service.js';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { subirImagenAGitHub } from '../services/github.service.js';
 
 
 // ===== SUBIR FOTO DE PERFIL =====
@@ -15,9 +13,10 @@ export const subirFotoPerfil = async (req, res) => {
             return res.status(400).json({ error: 'No se ha subido ninguna imagen' });
         }
 
-        const baseUrl = process.env.BASE_URL || 'https://techmanage-api.onrender.com';
-        const imagenUrl = `${baseUrl}/uploads/${req.file.filename}`;
+        // Subir a GitHub
+        const imagenUrl = await subirImagenAGitHub(req.file.path, req.file.filename, 'uploads/usuarios');
 
+        // Guardar URL en la base de datos
         const [result] = await conmysql.query(
             'UPDATE usuarios SET foto_perfil = ? WHERE id_usuario = ?',
             [imagenUrl, id]

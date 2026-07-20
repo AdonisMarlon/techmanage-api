@@ -16,6 +16,8 @@ export const subirImagenRepuesto = async (req, res) => {
             return res.status(400).json({ error: 'No se ha subido ninguna imagen' });
         }
 
+        console.log('Imagen de repuesto recibida:', req.file.filename);
+
         // Subir a GitHub
         const imagenUrl = await subirImagenAGitHub(req.file.path, req.file.filename, 'uploads/inventario');
 

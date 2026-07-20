@@ -20,7 +20,6 @@ router.put('/inventario/:id', verificarToken, verificarAdmin, actualizarRepuesto
 router.delete('/inventario/:id', verificarToken, verificarAdmin, eliminarRepuesto);
 
 router.post('/inventario/:id/imagen', verificarToken, upload.single('imagen'), subirImagenRepuesto);
-
 // ===== CATEGORIAS =====
 router.get('/categorias', verificarToken, getCategorias);
 

@@ -3,22 +3,23 @@ import bcrypt from 'bcryptjs';
 import { notificarNuevoUsuario } from '../services/notification.service.js';
 import { subirImagenAGitHub } from '../services/github.service.js';
 
-
-// ===== SUBIR FOTO DE PERFIL =====
+// ===== SUBIR FOTO DE PERFIL
 export const subirFotoPerfil = async (req, res) => {
     try {
         const { id } = req.params;
+        const userId = req.user.id;
+        if (parseInt(id) !== userId) {
+            return res.status(403).json({ error: 'No puedes subir foto a otro usuario' });
+        }
         
         if (!req.file) {
             return res.status(400).json({ error: 'No se ha subido ninguna imagen' });
         }
 
-        console.log('📸 Foto de perfil recibida:', req.file.filename);
+        console.log('Foto de perfil recibida:', req.file.filename);
 
-        // Subir a GitHub
         const imagenUrl = await subirImagenAGitHub(req.file.path, req.file.filename, 'uploads/usuarios');
 
-        // Guardar URL en la base de datos
         const [result] = await conmysql.query(
             'UPDATE usuarios SET foto_perfil = ? WHERE id_usuario = ?',
             [imagenUrl, id]
@@ -95,35 +96,58 @@ export const crearUsuario = async (req, res) => {
         res.status(500).json({ error: 'Error al crear el usuario' });
     }
 };
-
-// ============================================================
-// ACTUALIZAR USUARIO (SOLO ADMIN)
-// ============================================================
+// ===== ACTUALIZAR USUARIO (CUALQUIER USUARIO PUEDE ACTUALIZAR SU PERFIL) =====
 export const actualizarUsuario = async (req, res) => {
     try {
         const { id } = req.params;
-        const { nombre, correo, estado } = req.body;
-        const adminNombre = req.user?.nombre || 'Admin';
+        const { nombre, correo, estado, rol, foto_perfil } = req.body;
+        const userId = req.user.id;
+        const userRol = req.user.rol;
 
-        // Obtener datos anteriores para la notificación
-        const [usuarioAnterior] = await conmysql.query(
-            'SELECT nombre, rol FROM usuarios WHERE id_usuario = ?',
-            [id]
-        );
+        // Cualquier usuario solo puede editar su propio perfil
+        if (parseInt(id) !== userId) {
+            return res.status(403).json({ error: 'No puedes editar a otro usuario' });
+        }
 
-        const [result] = await conmysql.query(
-            'UPDATE usuarios SET nombre = ?, correo = ?, estado = ? WHERE id_usuario = ?',
-            [nombre, correo, estado, id]
-        );
+        // TECNICO: solo puede cambiar nombre y correo
+        if (userRol === 'TECNICO') {
+            const [result] = await conmysql.query(
+                'UPDATE usuarios SET nombre = ?, correo = ? WHERE id_usuario = ?',
+                [nombre, correo, id]
+            );
+
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ error: 'Usuario no encontrado' });
+            }
+
+            return res.json({ mensaje: 'Perfil actualizado con éxito' });
+        }
+
+        // ADMIN: puede editar todo
+        let query = 'UPDATE usuarios SET nombre = ?, correo = ?';
+        let params = [nombre, correo];
+
+        if (estado !== undefined) {
+            query += ', estado = ?';
+            params.push(estado);
+        }
+        if (rol !== undefined) {
+            query += ', rol = ?';
+            params.push(rol);
+        }
+        if (foto_perfil !== undefined) {
+            query += ', foto_perfil = ?';
+            params.push(foto_perfil);
+        }
+
+        query += ' WHERE id_usuario = ?';
+        params.push(id);
+
+        const [result] = await conmysql.query(query, params);
 
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
-
-        // NOTIFICACIÓN: Usuario editado (opcional, si quieres notificar)
-        // Puedes agregar una función notificarUsuarioEditado si lo deseas
-        // Por ahora solo log
-        console.log(`[FCM] Usuario ${usuarioAnterior[0]?.nombre || 'N/A'} actualizado por ${adminNombre}`);
 
         res.json({ mensaje: 'Usuario actualizado con éxito' });
     } catch (error) {
@@ -200,9 +224,7 @@ export const cambiarPasswordAdmin = async (req, res) => {
     }
 };
 
-// ============================================================
-// CAMBIAR PROPIA CONTRASEÑA (Técnico)
-// ============================================================
+// ===== CAMBIAR PROPIA CONTRASEÑA (CUALQUIER USUARIO) =====
 export const cambiarPasswordPropio = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -216,7 +238,6 @@ export const cambiarPasswordPropio = async (req, res) => {
             return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres' });
         }
 
-        // Verificar contraseña actual
         const [usuario] = await conmysql.query(
             'SELECT password FROM usuarios WHERE id_usuario = ?',
             [userId]

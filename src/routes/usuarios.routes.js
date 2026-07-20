@@ -21,12 +21,10 @@ router.get('/usuarios/tecnicos', verificarToken, getTecnicos);
 router.post('/usuarios', verificarToken, verificarAdmin, crearUsuario);
 router.put('/usuarios/:id', verificarToken, verificarAdmin, actualizarUsuario);
 router.delete('/usuarios/:id', verificarToken, verificarAdmin, eliminarUsuario);
-
-// ===== CAMBIAR CONTRASEÑA =====
-// Admin cambia la contraseña de cualquier usuario
 router.put('/usuarios/:id/password', verificarToken, verificarAdmin, cambiarPasswordAdmin);
 
-// Técnico cambia su propia contraseña
+router.put('/usuarios/:id', verificarToken, actualizarUsuario);
+
 router.put('/usuarios/cambiar-password', verificarToken, cambiarPasswordPropio);
 
 router.post('/usuarios/:id/foto', verificarToken, upload.single('imagen'), subirFotoPerfil);

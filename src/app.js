@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import authRoutes from './routes/auth.routes.js';
 import clientesRoutes from './routes/clientes.routes.js';
 import inventarioRoutes from './routes/inventario.routes.js';
@@ -11,6 +13,8 @@ import usuariosRoutes from './routes/usuarios.routes.js';
 import categoriasEquiposRoutes from './routes/categoriasEquipos.routes.js';
 import solicitudesRoutes from './routes/solicitudes.routes.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -22,6 +26,8 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 
 // Rutas
 app.use('/api/auth', authRoutes);

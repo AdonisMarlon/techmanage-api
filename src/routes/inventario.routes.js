@@ -3,7 +3,7 @@ import {
     getInventario, getRepuestoById, crearRepuesto, 
     getCategorias, crearCategoria, actualizarCategoria, 
     actualizarRepuesto, eliminarRepuesto,
-    eliminarCategoria
+    eliminarCategoria,subirImagenRepuesto
 } from '../controladores/inventarioCtrl.js';
 import { verificarToken, verificarAdmin } from '../middlewares/auth.js';
 
@@ -17,6 +17,8 @@ router.get('/inventario/:id', verificarToken, getRepuestoById);
 router.post('/inventario', verificarToken, verificarAdmin, crearRepuesto);
 router.put('/inventario/:id', verificarToken, verificarAdmin, actualizarRepuesto);
 router.delete('/inventario/:id', verificarToken, verificarAdmin, eliminarRepuesto);
+
+router.post('/inventario/:id/imagen', verificarToken, upload.single('imagen'), subirImagenRepuesto);
 
 // ===== CATEGORIAS =====
 router.get('/categorias', verificarToken, getCategorias);

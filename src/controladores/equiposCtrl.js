@@ -1,5 +1,45 @@
 import { conmysql } from '../db.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
 import { notificarNuevoEquipo, notificarEquipoEditado } from '../services/notification.service.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// ===== SUBIR IMAGEN DE EQUIPO =====
+export const subirImagenEquipo = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        if (!req.file) {
+            return res.status(400).json({ error: 'No se ha subido ninguna imagen' });
+        }
+
+        const baseUrl = process.env.BASE_URL || 'https://techmanage-api.onrender.com';
+        const imagenUrl = `${baseUrl}/uploads/${req.file.filename}`;
+
+        const [result] = await conmysql.query(
+            'UPDATE equipos SET imagen = ? WHERE id_equipo = ?',
+            [imagenUrl, id]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Equipo no encontrado' });
+        }
+
+        res.json({ 
+            mensaje: 'Imagen subida con éxito',
+            imagenUrl: imagenUrl
+        });
+
+    } catch (error) {
+        console.error('[ERROR] subirImagenEquipo:', error.message);
+        res.status(500).json({ error: 'Error al subir la imagen' });
+    }
+};
+
 
 // ============================================================
 // OBTENER TODOS LOS EQUIPOS

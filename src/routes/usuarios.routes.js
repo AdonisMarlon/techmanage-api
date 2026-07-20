@@ -5,7 +5,8 @@ import {
     actualizarUsuario, 
     eliminarUsuario,
     cambiarPasswordAdmin,
-    cambiarPasswordPropio
+    cambiarPasswordPropio,
+    subirFotoPerfil
 } from '../controladores/usuariosCtrl.js';
 import { verificarToken, verificarAdmin } from '../middlewares/auth.js';
 
@@ -25,5 +26,8 @@ router.put('/usuarios/:id/password', verificarToken, verificarAdmin, cambiarPass
 
 // Técnico cambia su propia contraseña
 router.put('/usuarios/cambiar-password', verificarToken, cambiarPasswordPropio);
+
+router.post('/usuarios/:id/foto', verificarToken, upload.single('imagen'), subirFotoPerfil);
+
 
 export default router;

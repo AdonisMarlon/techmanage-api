@@ -1,6 +1,43 @@
 import { conmysql } from '../db.js';
 import bcrypt from 'bcryptjs';
 import { notificarNuevoUsuario } from '../services/notification.service.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+
+// ===== SUBIR FOTO DE PERFIL =====
+export const subirFotoPerfil = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        if (!req.file) {
+            return res.status(400).json({ error: 'No se ha subido ninguna imagen' });
+        }
+
+        const baseUrl = process.env.BASE_URL || 'https://techmanage-api.onrender.com';
+        const imagenUrl = `${baseUrl}/uploads/${req.file.filename}`;
+
+        const [result] = await conmysql.query(
+            'UPDATE usuarios SET foto_perfil = ? WHERE id_usuario = ?',
+            [imagenUrl, id]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        res.json({ 
+            mensaje: 'Foto de perfil subida con éxito',
+            imagenUrl: imagenUrl
+        });
+
+    } catch (error) {
+        console.error('[ERROR] subirFotoPerfil:', error.message);
+        res.status(500).json({ error: 'Error al subir la foto' });
+    }
+};
+
 
 // ============================================================
 // OBTENER TECNICOS

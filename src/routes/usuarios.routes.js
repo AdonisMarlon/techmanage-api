@@ -6,7 +6,8 @@ import {
     eliminarUsuario,
     cambiarPasswordAdmin,
     cambiarPasswordPropio,
-    subirFotoPerfil
+    subirFotoPerfil,
+    getUsuarioById
 } from '../controladores/usuariosCtrl.js';
 import { verificarToken, verificarAdmin } from '../middlewares/auth.js';
 import upload from '../middlewares/upload.js';
@@ -28,5 +29,8 @@ router.put('/usuarios/:id', verificarToken, actualizarUsuario);
 router.put('/usuarios/cambiar-password', verificarToken, cambiarPasswordPropio);
 
 router.post('/usuarios/:id/foto', verificarToken, upload.single('imagen'), subirFotoPerfil);
+
+// ===== OBTENER USUARIO POR ID (CUALQUIER ROL) =====
+router.get('/usuarios/:id', verificarToken, getUsuarioById);
 
 export default router;

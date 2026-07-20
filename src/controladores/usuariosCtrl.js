@@ -266,3 +266,25 @@ export const cambiarPasswordPropio = async (req, res) => {
         res.status(500).json({ error: 'Error al cambiar la contraseña' });
     }
 };
+
+
+// ===== OBTENER USUARIO POR ID (CUALQUIER ROL) =====
+export const getUsuarioById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const [result] = await conmysql.query(
+            'SELECT id_usuario, nombre, correo, rol, estado, foto_perfil FROM usuarios WHERE id_usuario = ?',
+            [id]
+        );
+        
+        if (result.length === 0) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+        
+        res.json(result[0]);
+    } catch (error) {
+        console.error('[ERROR] getUsuarioById:', error.message);
+        res.status(500).json({ error: 'Error al obtener el usuario' });
+    }
+};

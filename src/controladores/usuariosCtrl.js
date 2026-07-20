@@ -95,7 +95,6 @@ export const crearUsuario = async (req, res) => {
                 { nombre, rol: rol || 'TECNICO' },
                 adminNombre
             );
-            console.log('[FCM] Notificacion de nuevo usuario enviada al admin');
         } catch (notifError) {
             console.error('[ERROR] notificarNuevoUsuario:', notifError.message);
         }
@@ -121,12 +120,10 @@ export const actualizarUsuario = async (req, res) => {
         const userId = req.user.id;
         const userRol = req.user.rol;
 
-        // Cualquier usuario solo puede editar su propio perfil
         if (parseInt(id) !== userId) {
             return res.status(403).json({ error: 'No puedes editar a otro usuario' });
         }
 
-        // TECNICO: solo puede cambiar nombre, correo y foto_perfil
         if (userRol === 'TECNICO') {
             const [result] = await conmysql.query(
                 'UPDATE usuarios SET nombre = ?, correo = ?, foto_perfil = ? WHERE id_usuario = ?',
@@ -137,7 +134,6 @@ export const actualizarUsuario = async (req, res) => {
                 return res.status(404).json({ error: 'Usuario no encontrado' });
             }
 
-            // Obtener usuario actualizado
             const [usuarioActualizado] = await conmysql.query(
                 'SELECT id_usuario, nombre, correo, rol, estado, foto_perfil FROM usuarios WHERE id_usuario = ?',
                 [id]
@@ -149,7 +145,6 @@ export const actualizarUsuario = async (req, res) => {
             });
         }
 
-        // ADMIN: puede editar todo
         let query = 'UPDATE usuarios SET nombre = ?, correo = ?';
         let params = [nombre, correo];
 
@@ -205,8 +200,6 @@ export const eliminarUsuario = async (req, res) => {
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
 
-        console.log(`[FCM] Usuario ${usuario[0]?.nombre || 'N/A'} eliminado`);
-
         res.json({ mensaje: 'Usuario eliminado con exito' });
     } catch (error) {
         console.error('[ERROR] eliminarUsuario:', error.message);
@@ -248,6 +241,8 @@ export const cambiarPasswordPropio = async (req, res) => {
     try {
         const userId = req.user.id;
         const { passwordActual, nuevaPassword } = req.body;
+
+        console.log('Usuario que cambia password:', userId);
 
         if (!passwordActual || !nuevaPassword) {
             return res.status(400).json({ error: 'Debe ingresar la contrasena actual y la nueva' });
